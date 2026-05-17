@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@bcktrck/engine": ["../../bcktrck-engine/src/index.ts"],
+      "@bcktrck/engine/*": ["../../bcktrck-engine/src/*"]
+    }
+  }
+}

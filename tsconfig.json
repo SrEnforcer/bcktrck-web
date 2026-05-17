@@ -1,0 +1,7 @@
+{
+  "extends": "@tsfpp/tsconfig/app",
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

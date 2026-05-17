@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-ui: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --surface-canvas: #eff2f6;
+  --surface-panel: rgba(255, 255, 255, 0.84);
+  --surface-panel-elevated: rgba(255, 255, 255, 0.9);
+  --surface-overlay: rgba(253, 254, 255, 0.94);
+  --surface-soft: rgba(243, 246, 251, 0.95);
+  --surface-soft-hover: rgba(235, 240, 247, 1);
+  --surface-stage: #fbfcfe;
+  --surface-editor: #f7f9fc;
+  --surface-inset-line: rgba(255, 255, 255, 0.78);
+  --border-subtle: rgba(27, 41, 68, 0.11);
+  --border-strong: rgba(27, 41, 68, 0.22);
+  --text-primary: #111827;
+  --text-secondary: #4b5b75;
+  --text-muted: #6d7b93;
+  --accent: #1e4fd6;
+  --accent-hover: #1a46c0;
+  --accent-border: rgba(18, 69, 194, 0.46);
+  --accent-contrast: #f8fbff;
+  --focus-ring: rgba(30, 79, 214, 0.18);
+  --success-bg: rgba(16, 124, 69, 0.1);
+  --success-border: rgba(16, 124, 69, 0.2);
+  --success-text: #0d6a3a;
+  --warning-bg: rgba(166, 82, 29, 0.12);
+  --warning-border: rgba(166, 82, 29, 0.22);
+  --warning-text: #8c4818;
+  --error-bg: rgba(181, 35, 35, 0.08);
+  --error-border: rgba(181, 35, 35, 0.18);
+  --error-text: #8f1f1f;
+  --shadow-color: rgba(24, 36, 58, 0.08);
+  --pattern-line: rgba(36, 56, 88, 0.05);
+}
+
+:root[data-theme='dark'] {
+  --surface-canvas: #0f1218;
+  --surface-panel: rgba(21, 25, 33, 0.9);
+  --surface-panel-elevated: rgba(24, 29, 38, 0.94);
+  --surface-overlay: rgba(19, 23, 31, 0.96);
+  --surface-soft: rgba(34, 41, 53, 0.92);
+  --surface-soft-hover: rgba(41, 49, 62, 0.98);
+  --surface-stage: #f3f5f8;
+  --surface-editor: #0f1726;
+  --surface-inset-line: rgba(255, 255, 255, 0.03);
+  --border-subtle: rgba(205, 214, 229, 0.09);
+  --border-strong: rgba(205, 214, 229, 0.16);
+  --text-primary: #edf1f7;
+  --text-secondary: #b4bed0;
+  --text-muted: #8490a7;
+  --accent: #7aa2ff;
+  --accent-hover: #8bb0ff;
+  --accent-border: rgba(122, 162, 255, 0.36);
+  --accent-contrast: #0a1020;
+  --focus-ring: rgba(122, 162, 255, 0.16);
+  --success-bg: rgba(52, 199, 116, 0.14);
+  --success-border: rgba(52, 199, 116, 0.2);
+  --success-text: #9be7b8;
+  --warning-bg: rgba(250, 173, 83, 0.14);
+  --warning-border: rgba(250, 173, 83, 0.2);
+  --warning-text: #ffd0a1;
+  --error-bg: rgba(242, 109, 109, 0.12);
+  --error-border: rgba(242, 109, 109, 0.22);
+  --error-text: #ffb7b7;
+  --shadow-color: rgba(0, 0, 0, 0.26);
+  --pattern-line: rgba(214, 223, 238, 0.045);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--surface-canvas);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background-color: var(--surface-canvas);
+  background-image:
+    linear-gradient(var(--pattern-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pattern-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+#root {
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+h1,
+h2 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--focus-ring);
+}
