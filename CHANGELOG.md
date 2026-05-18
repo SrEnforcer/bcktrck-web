@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-18
+
 ### Added
 - TSF++ testing factories for API and frontend test suites.
 - Release automation and commit hooks scaffolding (`release-please`, Husky, commitlint).
