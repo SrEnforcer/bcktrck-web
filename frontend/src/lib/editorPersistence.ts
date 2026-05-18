@@ -1,3 +1,11 @@
+/**
+ * @module lib/editor-persistence
+ *
+ * Pure helpers for keyboard save shortcut detection and source backup export encoding.
+ *
+ * @packageDocumentation
+ */
+
 type SaveShortcutKeyboardState = {
   readonly key: string
   readonly ctrlKey: boolean

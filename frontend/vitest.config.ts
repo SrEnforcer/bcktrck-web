@@ -1,6 +1,19 @@
+/**
+ * @module vitest-config
+ *
+ * Vitest configuration for frontend unit and component tests.
+ * Enables jsdom environment and test file discovery patterns.
+ *
+ * @packageDocumentation
+ */
+
 import { defineConfig } from 'vitest/config'
 
-export default defineConfig({
+/**
+ * Frontend Vitest configuration.
+ * @returns Vitest runtime configuration for frontend tests.
+ */
+const vitestConfig = defineConfig({
   define: {
     __BCKTRCK_DEBUG__: JSON.stringify(true)
   },
@@ -14,3 +27,5 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx']
   }
 })
+
+export default vitestConfig

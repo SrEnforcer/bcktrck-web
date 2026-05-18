@@ -1,5 +1,14 @@
+/**
+ * @module hooks/use-preview-viewport
+ *
+ * React hook that manages pan, zoom, and rectangle-selection interactions in
+ * the primary preview panel.
+ *
+ * @packageDocumentation
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fromNullable, getNumberField, getOrElse, isRecord, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getOrElse, isErr, isNone, isRecord, isSome, mapO, pipe, tryCatch } from '@tsfpp/prelude'
 import { debugLog } from '../logging/logger'
 import { clampScale, computeCenteredOffset, computeFitScale, computeReadableScale, type Point, type ViewBox, zoomOffsetAroundPivot } from '../lib/viewportMath'
 
@@ -34,45 +43,66 @@ type UsePreviewViewportResult = {
   readonly fitPreviewView: () => void
 }
 
+const readSessionStorage = (key: string): string | null => {
+  if (typeof window === 'undefined') return null
+
+  const readResult = tryCatch(
+    () => window.sessionStorage.getItem(key),
+    () => null,
+  )
+
+  return isErr(readResult) ? null : readResult.value
+}
+
+const writeSessionStorage = (key: string, value: string, logMessage: string): void => {
+  if (typeof window === 'undefined') return
+
+  const writeResult = tryCatch(
+    () => {
+      window.sessionStorage.setItem(key, value)
+      return value
+    },
+    (cause) => cause,
+  )
+
+  if (isErr(writeResult)) {
+    debugLog('storage', logMessage, writeResult.error)
+  }
+}
+
 /**
  * Manage preview viewport pan/zoom/selection state for the main workspace panel.
  * @param input Current viewBox and subtree selection signature.
  * @returns Preview viewport state and interaction handlers.
  */
 export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewViewportResult => {
+  // DEVIATION(11.1): This hook intentionally coordinates persistence, pointer state, and viewport math for one cohesive interaction model.
   const sessionZoomKey = 'bcktrck:preview-zoom'
   const sessionOffsetKey = 'bcktrck:preview-offset'
   const [previewScale, setPreviewScale] = useState(() => {
-    if (typeof window === 'undefined') return 1
-    try {
-      const stored = window.sessionStorage.getItem(sessionZoomKey)
-      return pipe(
-        fromNullable(stored),
-        mapO((value) => Number(value)),
-        getOrElse(() => 1)
-      )
-    } catch {
-      return 1
-    }
+    const stored = readSessionStorage(sessionZoomKey)
+    return pipe(
+      fromNullable(stored),
+      mapO((value) => Number(value)),
+      getOrElse(() => 1)
+    )
   })
   const [previewOffset, setPreviewOffset] = useState<Point>(() => {
-    if (typeof window === 'undefined') return { x: 0, y: 0 }
-    try {
-      const stored = window.sessionStorage.getItem(sessionOffsetKey)
-      const raw = pipe(fromNullable(stored), getOrElse(() => '{"x":0,"y":0}'))
-      const parsed = JSON.parse(raw)
-      if (!isRecord(parsed)) return { x: 0, y: 0 }
+    const stored = readSessionStorage(sessionOffsetKey)
+    const parsedResult = tryCatch(
+      () => JSON.parse(pipe(fromNullable(stored), getOrElse(() => '{"x":0,"y":0}'))),
+      () => ({ x: 0, y: 0 }),
+    )
+    const parsed = isErr(parsedResult) ? { x: 0, y: 0 } : parsedResult.value
+    if (!isRecord(parsed)) return { x: 0, y: 0 }
 
-      const x = getNumberField(parsed, 'x')
-      const y = getNumberField(parsed, 'y')
-      if (isSome(x) && isSome(y)) {
-        return { x: x.value, y: y.value }
-      }
-
-      return { x: 0, y: 0 }
-    } catch {
-      return { x: 0, y: 0 }
+    const x = getNumberField(parsed, 'x')
+    const y = getNumberField(parsed, 'y')
+    if (isSome(x) && isSome(y)) {
+      return { x: x.value, y: y.value }
     }
+
+    return { x: 0, y: 0 }
   })
 
   const previewScaleRef = useRef(1)
@@ -92,24 +122,12 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
 
   useEffect(() => {
     previewScaleRef.current = previewScale
-    if (typeof window === 'undefined') return
-
-    try {
-      window.sessionStorage.setItem(sessionZoomKey, String(previewScale))
-    } catch (error) {
-      debugLog('storage', 'persist preview zoom failed', error)
-    }
+    writeSessionStorage(sessionZoomKey, String(previewScale), 'persist preview zoom failed')
   }, [previewScale])
 
   useEffect(() => {
     previewOffsetRef.current = previewOffset
-    if (typeof window === 'undefined') return
-
-    try {
-      window.sessionStorage.setItem(sessionOffsetKey, JSON.stringify(previewOffset))
-    } catch (error) {
-      debugLog('storage', 'persist preview offset failed', error)
-    }
+    writeSessionStorage(sessionOffsetKey, JSON.stringify(previewOffset), 'persist preview offset failed')
   }, [previewOffset])
 
   const handlePreviewModePan = useCallback(() => {
@@ -143,13 +161,16 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
   }, [])
 
   const setPreviewHomePosition = useCallback((mode: 'readable' | 'fit' = 'readable') => {
-    const stage = previewStageRef.current
-    if (stage === null || input.viewBox === null) return
+    const stageOption = fromNullable(previewStageRef.current)
+    const viewBoxOption = fromNullable(input.viewBox)
+    if (isNone(stageOption) || isNone(viewBoxOption)) return
+    const stage = stageOption.value
+    const viewBox = viewBoxOption.value
 
     const stageSize = { width: stage.clientWidth, height: stage.clientHeight }
-    const fitScale = computeFitScale(input.viewBox, stageSize)
+    const fitScale = computeFitScale(viewBox, stageSize)
     const targetScale = mode === 'fit' ? fitScale : computeReadableScale(fitScale)
-    const centeredOffset = computeCenteredOffset(input.viewBox, stageSize, targetScale)
+    const centeredOffset = computeCenteredOffset(viewBox, stageSize, targetScale)
 
     previewScaleRef.current = targetScale
     previewOffsetRef.current = centeredOffset
@@ -170,7 +191,8 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
   }, [])
 
   useEffect(() => {
-    if (input.viewBox === null || previewAutoCenteredRef.current) return
+    const viewBoxOption = fromNullable(input.viewBox)
+    if (isNone(viewBoxOption) || previewAutoCenteredRef.current) return
 
     const animationFrame = window.requestAnimationFrame(() => {
       setPreviewHomePosition('readable')
@@ -208,14 +230,15 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
       return
     }
 
-    if (rectSelect === null || previewDragModeRef.current !== 'select') return
+    const rectSelectOption = fromNullable(rectSelect)
+    if (isNone(rectSelectOption) || previewDragModeRef.current !== 'select') return
 
     const rect = pipe(
       fromNullable(previewStageRef.current?.getBoundingClientRect()),
       getOrElse(() => ({ left: 0, top: 0 }))
     )
     setRectSelect({
-      ...rectSelect,
+      ...rectSelectOption.value,
       end: { x: event.clientX - rect.left, y: event.clientY - rect.top }
     })
   }, [isPreviewDragging, previewDragStart, rectSelect])
@@ -223,8 +246,17 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
   const handlePreviewMouseUp = useCallback(() => {
     setIsPreviewDragging(false)
 
-    if (rectSelect !== null && previewDragModeRef.current === 'select' && input.viewBox !== null && previewStageRef.current !== null) {
-      const { start, end } = rectSelect
+    const rectSelectOption = fromNullable(rectSelect)
+    const viewBoxOption = fromNullable(input.viewBox)
+    const stageOption = fromNullable(previewStageRef.current)
+
+    if (
+      isSome(rectSelectOption)
+      && previewDragModeRef.current === 'select'
+      && isSome(viewBoxOption)
+      && isSome(stageOption)
+    ) {
+      const { start, end } = rectSelectOption.value
       const minX = Math.min(start.x, end.x)
       const minY = Math.min(start.y, end.y)
       const maxX = Math.max(start.x, end.x)
@@ -237,8 +269,8 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
       const svgW = (maxX - minX) / scale
       const svgH = (maxY - minY) / scale
 
-      const stageWidth = previewStageRef.current.clientWidth
-      const stageHeight = previewStageRef.current.clientHeight
+      const stageWidth = stageOption.value.clientWidth
+      const stageHeight = stageOption.value.clientHeight
       const fitScale = clampScale(Math.min(stageWidth / svgW, stageHeight / svgH))
       const offsetX = -svgX * fitScale + (stageWidth - svgW * fitScale) / 2
       const offsetY = -svgY * fitScale + (stageHeight - svgH * fitScale) / 2
@@ -252,8 +284,9 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
   }, [previewMode, rectSelect, input.viewBox])
 
   const zoomPreviewByFactor = useCallback((factor: number) => {
-    const stage = previewStageRef.current
-    if (stage === null) return
+    const stageOption = fromNullable(previewStageRef.current)
+    if (isNone(stageOption)) return
+    const stage = stageOption.value
 
     applyPreviewZoom(factor, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 })
   }, [applyPreviewZoom])
@@ -272,8 +305,9 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
   }, [setPreviewHomePosition, setPreviewMode])
 
   useEffect(() => {
-    const element = previewStageRef.current
-    if (element === null) return
+    const elementOption = fromNullable(previewStageRef.current)
+    if (isNone(elementOption)) return
+    const element = elementOption.value
 
     const handler = (event: WheelEvent) => {
       event.preventDefault()

@@ -1,3 +1,11 @@
+/**
+ * @module globals
+ *
+ * Frontend ambient declarations used by build-time defines and local engine typing.
+ *
+ * @packageDocumentation
+ */
+
 declare const __BCKTRCK_DEBUG__: boolean
 
 declare module '@bcktrck/engine' {
@@ -53,8 +61,8 @@ declare module '@bcktrck/engine' {
 	 */
 	export type CompileErr = {
 		readonly ok: false
-		readonly parseError?: ParseErr
-		readonly resolveErrors?: readonly ResolveError[]
+		readonly parseError: ParseErr | null
+		readonly resolveErrors: readonly ResolveError[] | null
 	}
 
 	/**
@@ -66,10 +74,10 @@ declare module '@bcktrck/engine' {
 	 * Compile options accepted by the engine.
 	 */
 	export type CompileOptions = {
-		readonly subtreeId?: string
-		readonly subtreeIds?: readonly string[]
-		readonly styleSource?: string
-		readonly ignoreSourceStyle?: boolean
+		readonly subtreeId: string | null
+		readonly subtreeIds: readonly string[] | null
+		readonly styleSource: string | null
+		readonly ignoreSourceStyle: boolean | null
 	}
 
 	/**
@@ -83,14 +91,14 @@ declare module '@bcktrck/engine' {
 	 * @param options Optional compile options.
 	 * @returns Compile result containing SVG or parse/resolve errors.
 	 */
-	export const compile: (source: string, renderConfig?: RenderConfig, options?: CompileOptions) => CompileResult
+	export const compile: (source: string, renderConfig: RenderConfig | null, options: CompileOptions | null) => CompileResult
 	/**
 	 * List subtree entries from source for selection UIs.
 	 * @param source Raw bcktrck source text.
 	 * @param options Optional style-related compile options.
 	 * @returns Subtree entries in preorder depth-first order.
 	 */
-	export const listSubtreesFromSource: (source: string, options?: Pick<CompileOptions, 'styleSource' | 'ignoreSourceStyle'>) => readonly SubtreeEntry[]
+	export const listSubtreesFromSource: (source: string, options: Pick<CompileOptions, 'styleSource' | 'ignoreSourceStyle'> | null) => readonly SubtreeEntry[]
 	/**
 	 * Resolve a named style pack.
 	 * @param name Style pack name.

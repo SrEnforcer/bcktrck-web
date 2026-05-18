@@ -1,5 +1,6 @@
 import type { SubtreeEntry } from '@bcktrck/engine'
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 
 import {
   buildParentMapFromPreorderDepth,
@@ -7,23 +8,13 @@ import {
   pruneRedundantDescendantsForForestMode,
   sanitizeSelectedSubtreeIds
 } from './subtreeSelection'
+import {
+  makeDepartmentEntry,
+  makeSubtreeEntry,
+  sampleSubtreeEntries,
+} from '../tests/factories/subtreeSelection.factory'
 
-const entry = (id: string, depth: number, kind: SubtreeEntry['kind'] = 'department'): SubtreeEntry => ({
-  kind,
-  id,
-  label: id,
-  depth
-})
-
-const sampleEntries = [
-  entry('root', 0),
-  entry('ops', 1),
-  entry('ops-a', 2),
-  entry('ops-b', 2),
-  entry('eng', 1),
-  entry('eng-a', 2),
-  entry('eng-b', 2)
-]
+const sampleEntries: ReadonlyArray<SubtreeEntry> = sampleSubtreeEntries
 
 describe('sanitizeSelectedSubtreeIds', () => {
   it('keeps known ids, removes unknown ids, and preserves first occurrence', () => {
@@ -33,10 +24,10 @@ describe('sanitizeSelectedSubtreeIds', () => {
 
   it('drops non-department ids when called with department-only entries', () => {
     const mixedEntries = [
-      entry('root', 0, 'employee'),
-      entry('eng', 1, 'department'),
-      entry('eng-ic', 2, 'employee'),
-      entry('ops', 1, 'department')
+      makeSubtreeEntry({ id: 'root', depth: 0, kind: 'employee', label: 'root' }),
+      makeSubtreeEntry({ id: 'eng', depth: 1, kind: 'department', label: 'eng' }),
+      makeSubtreeEntry({ id: 'eng-ic', depth: 2, kind: 'employee', label: 'eng-ic' }),
+      makeSubtreeEntry({ id: 'ops', depth: 1, kind: 'department', label: 'ops' })
     ]
     const departmentOnlyEntries = mixedEntries.filter((item) => item.kind === 'department')
     const result = sanitizeSelectedSubtreeIds(departmentOnlyEntries, ['eng', 'eng-ic', 'ops', 'eng'])
@@ -60,10 +51,10 @@ describe('buildParentMapFromPreorderDepth', () => {
 
   it('supports multiple roots', () => {
     const parentById = buildParentMapFromPreorderDepth([
-      entry('root-a', 0),
-      entry('a-child', 1),
-      entry('root-b', 0),
-      entry('b-child', 1)
+      makeDepartmentEntry({ id: 'root-a', depth: 0 }),
+      makeDepartmentEntry({ id: 'a-child', depth: 1 }),
+      makeDepartmentEntry({ id: 'root-b', depth: 0 }),
+      makeDepartmentEntry({ id: 'b-child', depth: 1 })
     ])
 
     expect(parentById.has('root-a')).toBe(false)
@@ -74,11 +65,11 @@ describe('buildParentMapFromPreorderDepth', () => {
 
   it('preserves correct parents for mixed-kind preorder trees', () => {
     const parentById = buildParentMapFromPreorderDepth([
-      entry('root-emp', 0, 'employee'),
-      entry('dept-a', 1),
-      entry('employee-a1', 2, 'employee'),
-      entry('dept-b', 1),
-      entry('employee-b1', 2, 'employee')
+      makeSubtreeEntry({ id: 'root-emp', depth: 0, kind: 'employee', label: 'root-emp' }),
+      makeDepartmentEntry({ id: 'dept-a', depth: 1 }),
+      makeSubtreeEntry({ id: 'employee-a1', depth: 2, kind: 'employee', label: 'employee-a1' }),
+      makeDepartmentEntry({ id: 'dept-b', depth: 1 }),
+      makeSubtreeEntry({ id: 'employee-b1', depth: 2, kind: 'employee', label: 'employee-b1' })
     ])
 
     expect(parentById.get('dept-a')).toBe('root-emp')
@@ -112,21 +103,21 @@ describe('computeLowestCommonAncestor', () => {
 
   it('returns undefined for selections from different roots', () => {
     const forestParentById = buildParentMapFromPreorderDepth([
-      entry('root-a', 0),
-      entry('a-child', 1),
-      entry('root-b', 0),
-      entry('b-child', 1)
+      makeDepartmentEntry({ id: 'root-a', depth: 0 }),
+      makeDepartmentEntry({ id: 'a-child', depth: 1 }),
+      makeDepartmentEntry({ id: 'root-b', depth: 0 }),
+      makeDepartmentEntry({ id: 'b-child', depth: 1 })
     ])
     expect(computeLowestCommonAncestor(['a-child', 'b-child'], forestParentById)).toBeUndefined()
   })
 
   it('returns common non-department parent when departments are siblings', () => {
     const parentById = buildParentMapFromPreorderDepth([
-      entry('ceo', 0, 'employee'),
-      entry('dept-fin', 1),
-      entry('fin-manager', 2, 'employee'),
-      entry('dept-ops', 1),
-      entry('ops-manager', 2, 'employee')
+      makeSubtreeEntry({ id: 'ceo', depth: 0, kind: 'employee', label: 'ceo' }),
+      makeDepartmentEntry({ id: 'dept-fin', depth: 1 }),
+      makeSubtreeEntry({ id: 'fin-manager', depth: 2, kind: 'employee', label: 'fin-manager' }),
+      makeDepartmentEntry({ id: 'dept-ops', depth: 1 }),
+      makeSubtreeEntry({ id: 'ops-manager', depth: 2, kind: 'employee', label: 'ops-manager' })
     ])
 
     expect(computeLowestCommonAncestor(['dept-fin', 'dept-ops'], parentById)).toBe('ceo')
@@ -152,5 +143,31 @@ describe('pruneRedundantDescendantsForForestMode', () => {
 
   it('returns empty selection for empty input', () => {
     expect(pruneRedundantDescendantsForForestMode([], parentById)).toEqual([])
+  })
+
+  it('satisfies idempotence law for forest pruning', () => {
+    const knownIds = sampleEntries.map((item) => item.id)
+
+    fc.assert(
+      fc.property(fc.array(fc.constantFrom(...knownIds), { maxLength: 20 }), (selectedIds) => {
+        const once = pruneRedundantDescendantsForForestMode(selectedIds, parentById)
+        const twice = pruneRedundantDescendantsForForestMode(once, parentById)
+
+        expect(twice).toEqual(once)
+      }),
+    )
+  })
+})
+
+describe('sanitizeSelectedSubtreeIds laws', () => {
+  it('satisfies membership law: sanitized ids are subset of known entries', () => {
+    const knownIds = sampleEntries.map((item) => item.id)
+
+    fc.assert(
+      fc.property(fc.array(fc.string(), { maxLength: 20 }), (selectedIds) => {
+        const sanitized = sanitizeSelectedSubtreeIds(sampleEntries, selectedIds)
+        expect(sanitized.every((id) => knownIds.includes(id))).toBe(true)
+      }),
+    )
   })
 })

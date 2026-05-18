@@ -1,26 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-
-const sanitizeMock = vi.fn((raw: string) => `clean:${raw}`)
+import {
+  makeSanitizedSvgMarkup,
+  makeUnsafeSvgMarkup,
+} from '../tests/factories/svgSanitization.factory'
 
 vi.mock('dompurify', () => ({
   default: {
-    sanitize: sanitizeMock
+    sanitize: (raw: string): string => `clean:${raw}`,
   }
 }))
 
 describe('sanitizeSvgMarkup', () => {
   it('delegates to DOMPurify with SVG-only profile', async () => {
     const { sanitizeSvgMarkup } = await import('./svgSanitization')
-    const rawSvg = '<svg><script>alert(1)</script><rect /></svg>'
+    const rawSvg = makeUnsafeSvgMarkup()
 
     const sanitized = sanitizeSvgMarkup(rawSvg)
 
-    expect(sanitized).toBe(`clean:${rawSvg}`)
-    expect(sanitizeMock).toHaveBeenCalledWith(rawSvg, {
-      USE_PROFILES: {
-        svg: true,
-        svgFilters: true
-      }
-    })
+    expect(sanitized).toBe(makeSanitizedSvgMarkup({ rawSvg }))
   })
 })

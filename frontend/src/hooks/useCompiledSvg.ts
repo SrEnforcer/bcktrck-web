@@ -1,5 +1,14 @@
+/**
+ * @module hooks/use-compiled-svg
+ *
+ * React hook that compiles source text through the API boundary and exposes
+ * sanitized SVG plus user-facing error formatting.
+ *
+ * @packageDocumentation
+ */
+
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, getNumberField, getOrElse, getStringField, getTypedField, isNone, isRecord, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getOrElse, getStringField, getTypedField, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatchAsync } from '@tsfpp/prelude'
 import { sanitizeSvgMarkup } from '../lib/svgSanitization'
 
 type ParseError = {
@@ -50,18 +59,16 @@ const decodeParseError = (value: unknown): ParseError | undefined => {
 
 const decodeResolveErrors = (value: unknown): ReadonlyArray<ResolveError> | undefined => {
   if (!Array.isArray(value)) return undefined
-  const decoded = value
-    .map((item) => {
-      if (!isRecord(item)) return undefined
-      const line = getNumberField(item, 'line')
-      const col = getNumberField(item, 'col')
-      const message = getStringField(item, 'message')
+  const decoded = value.flatMap((item) => {
+    if (!isRecord(item)) return []
+    const line = getNumberField(item, 'line')
+    const col = getNumberField(item, 'col')
+    const message = getStringField(item, 'message')
 
-      return isSome(line) && isSome(col) && isSome(message)
-        ? { line: line.value, col: col.value, message: message.value }
-        : undefined
-    })
-    .filter((item): item is ResolveError => item !== undefined)
+    return isSome(line) && isSome(col) && isSome(message)
+      ? [{ line: line.value, col: col.value, message: message.value }]
+      : []
+  })
 
   return decoded
 }
@@ -139,15 +146,15 @@ const formatParseErrorWithContext = (
 
   const context = Array.from({ length: endLine - startLine + 1 }, (_, index) => {
     const lineNo = startLine + index
-    const text = lines[lineNo - 1] ?? ''
+    const text = pipe(fromNullable(lines[lineNo - 1]), getOrElse(() => ''))
     const marker = lineNo === errorLine ? '>' : ' '
     return `${marker} ${String(lineNo).padStart(3, ' ')} | ${text}`
   })
 
-  const currentLineText = lines[errorLine - 1] ?? ''
+  const currentLineText = pipe(fromNullable(lines[errorLine - 1]), getOrElse(() => ''))
   const pointerPrefix = `    ${String(errorLine).padStart(3, ' ')} | `
   const pointer = `${pointerPrefix}${buildCaretPointer(currentLineText, parseError.col)}`
-  const hint = buildParseHint(parseError.error)
+  const hint = fromNullable(buildParseHint(parseError.error))
 
   return [
     `Parse error at ${parseError.line}:${parseError.col}`,
@@ -155,7 +162,7 @@ const formatParseErrorWithContext = (
     '',
     ...context,
     pointer,
-    ...(hint !== undefined ? ['', hint] : [])
+    ...(isSome(hint) ? ['', hint.value] : [])
   ].join('\n')
 }
 
@@ -186,26 +193,56 @@ export type UseCompiledSvgResult = {
  * @returns Compile state, render-safe SVG, and derived error text.
  */
 export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult => {
+  // DEVIATION(11.1): Hook intentionally co-locates fetch/decode/render state to preserve a single source of truth for compile UX.
   const [result, setResult] = useState<CompileResult>(initialCompileResult)
 
   useEffect(() => {
+    // DEVIATION(1.9): AbortController is required to cancel in-flight browser fetch requests on dependency changes.
     const abortController = new AbortController()
 
     const loadCompileResult = async (): Promise<void> => {
-      const response = await fetch('/api/compile', {
+      const requestBody = {
+        source: input.source,
+        ignoreSourceStyle: input.ignoreSourceStyle,
+        ...pipe(
+          fromNullable(input.effectiveSubtreeId),
+          mapO((effectiveSubtreeId) => ({ effectiveSubtreeId })),
+          getOrElse(() => ({})),
+        ),
+        ...pipe(
+          fromNullable(input.effectiveSubtreeIds),
+          mapO((effectiveSubtreeIds) => ({ effectiveSubtreeIds })),
+          getOrElse(() => ({})),
+        ),
+        ...pipe(
+          fromNullable(input.styleSource),
+          mapO((styleSource) => ({ styleSource })),
+          getOrElse(() => ({})),
+        ),
+      }
+
+      const responseResult = await tryCatchAsync(
+        () => fetch('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: input.source,
-          effectiveSubtreeId: pipe(fromNullable(input.effectiveSubtreeId), getOrElse((): string | null => null)),
-          effectiveSubtreeIds: pipe(fromNullable(input.effectiveSubtreeIds), getOrElse((): ReadonlyArray<string> | null => null)),
-          styleSource: pipe(fromNullable(input.styleSource), getOrElse((): string | null => null)),
-          ignoreSourceStyle: input.ignoreSourceStyle,
-        }),
+          body: JSON.stringify(requestBody),
         signal: abortController.signal,
-      }).catch(() => undefined)
+        }),
+        (cause) => cause,
+      )
 
-      const responseOption = fromNullable(response)
+      if (!isOk(responseResult)) {
+        setResult({
+          ok: false,
+          parseError: undefined,
+          resolveErrors: [
+            { line: 0, col: 0, message: 'Compile API unavailable. Start @bcktrck/api and retry.' },
+          ],
+        })
+        return
+      }
+
+      const responseOption = fromNullable(responseResult.value)
 
       const isResponseOk = pipe(
         responseOption,
@@ -227,8 +264,22 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
         return
       }
 
-      const payload = await responseOption.value.json().catch(() => undefined)
-      const decoded = decodeCompileResult(payload)
+      const payloadResult = await tryCatchAsync(
+        () => responseOption.value.json(),
+        (cause) => cause,
+      )
+      if (!isOk(payloadResult)) {
+        setResult({
+          ok: false,
+          parseError: undefined,
+          resolveErrors: [
+            { line: 0, col: 0, message: 'Compile request failed.' },
+          ],
+        })
+        return
+      }
+
+      const decoded = decodeCompileResult(payloadResult.value)
       pipe(
         fromNullable(decoded),
         mapO((value) => {
@@ -238,15 +289,19 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
       )
     }
 
-    loadCompileResult().catch(() => {
-      setResult({
-        ok: false,
-        parseError: undefined,
-        resolveErrors: [
-          { line: 0, col: 0, message: 'Compile request failed.' },
-        ],
-      })
-    })
+    void tryCatchAsync(
+      loadCompileResult,
+      () => {
+        setResult({
+          ok: false,
+          parseError: undefined,
+          resolveErrors: [
+            { line: 0, col: 0, message: 'Compile request failed.' },
+          ],
+        })
+        return undefined
+      },
+    )
 
     return () => {
       abortController.abort()

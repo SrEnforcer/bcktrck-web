@@ -1,3 +1,12 @@
+/**
+ * @module hooks/use-theme-effects
+ *
+ * React hook that resolves theme preference against system settings and
+ * synchronizes resolved theme with document root attributes.
+ *
+ * @packageDocumentation
+ */
+
 import { useEffect, useState } from 'react'
 
 type ThemePreference = 'system' | 'light' | 'dark'
@@ -14,6 +23,8 @@ type UseThemeEffectsInput = {
 
 /**
  * Derive and synchronize theme state with system preference and document root.
+ * @param input User-selected theme preference.
+ * @returns Current system theme and resolved effective theme.
  */
 export const useThemeEffects = (input: UseThemeEffectsInput): { readonly systemTheme: ResolvedTheme; readonly resolvedTheme: ResolvedTheme } => {
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() => resolveSystemTheme())

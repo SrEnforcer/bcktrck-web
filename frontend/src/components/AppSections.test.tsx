@@ -6,6 +6,12 @@ import {
   PreviewPanel,
   WorkspaceTopbar,
 } from './AppSections'
+import {
+  makeEditorPanelProps,
+  makeOverlayViewerProps,
+  makePreviewPanelErrorProps,
+  makeWorkspaceTopbarProps,
+} from '../tests/factories/appSectionsProps.factory'
 
 vi.mock('./BcktrckEditor', () => ({
   BcktrckEditor: () => <div>Editor Stub</div>,
@@ -16,23 +22,7 @@ describe('WorkspaceTopbar', () => {
     const onExportSource = vi.fn()
 
     render(
-      <WorkspaceTopbar
-        renderStatus="Render OK"
-        isRenderOk={true}
-        sourceLineCount={12}
-        editorFontSize={14}
-        currentPrintFormatLabel="A4 Landscape"
-        stylePackChoice="inherit"
-        themePreference="system"
-        stylePackOptions={[{ value: 'inherit', label: 'From source' }]}
-        themeOptions={[{ value: 'system', label: 'System' }]}
-        undoStack={[]}
-        onStylePackChange={() => undefined}
-        onThemePreferenceChange={() => undefined}
-        onExportSource={onExportSource}
-        onUndo={() => undefined}
-        onResetSample={() => undefined}
-      />,
+      <WorkspaceTopbar {...makeWorkspaceTopbarProps({ onExportSource })} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Export .btl' }))
@@ -44,27 +34,7 @@ describe('WorkspaceTopbar', () => {
 describe('EditorPanel', () => {
   it('renders source editor tab content when source tab is active', () => {
     render(
-      <EditorPanel
-        leftPanelTab="source"
-        editorPanelWidth={42}
-        editorFontSize={14}
-        source={'org "Test"'}
-        styleEditorText=""
-        editorInstanceKey="source-key"
-        styleEditorInstanceKey="style-key"
-        resolvedTheme="light"
-        subtreeEntries={[]}
-        subtreeIsolationMode="forest"
-        normalizedSelectedSubtreeIds={[]}
-        forestSelectionIds={[]}
-        onLeftPanelTabChange={() => undefined}
-        onEditorFontSizeChange={() => undefined}
-        onSourceChange={() => undefined}
-        onStyleEditorChange={() => undefined}
-        onSubtreeIsolationModeChange={() => undefined}
-        onClearSelectedSubtrees={() => undefined}
-        onToggleSelectedSubtree={() => undefined}
-      />,
+      <EditorPanel {...makeEditorPanelProps()} />,
     )
 
     expect(screen.getByText('Editor Stub')).toBeDefined()
@@ -74,32 +44,7 @@ describe('EditorPanel', () => {
 describe('PreviewPanel', () => {
   it('renders error state content when result is not ok', () => {
     render(
-      <PreviewPanel
-        isResultOk={false}
-        errorText="Compile failed"
-        safeSvg=""
-        isPreviewDragging={false}
-        previewMode="pan"
-        isCtrlHeld={false}
-        previewScale={1}
-        previewOffset={{ x: 0, y: 0 }}
-        rectSelect={null}
-        printPageFormat="a4-landscape"
-        printPageFormats={[{ value: 'a4-landscape', label: 'A4 Landscape' }]}
-        previewStageRef={{ current: null }}
-        onPreviewModePan={() => undefined}
-        onPreviewModeToggleSelect={() => undefined}
-        onPreviewZoomOut={() => undefined}
-        onPreviewZoomIn={() => undefined}
-        onResetPreviewView={() => undefined}
-        onFitPreviewView={() => undefined}
-        onPrintPageFormatChange={() => undefined}
-        onPrintChart={() => undefined}
-        onOpenOverlay={() => undefined}
-        onPreviewMouseDown={() => undefined}
-        onPreviewMouseMove={() => undefined}
-        onPreviewMouseUp={() => undefined}
-      />,
+      <PreviewPanel {...makePreviewPanelErrorProps()} />,
     )
 
     expect(screen.getByText('Compile failed')).toBeDefined()
@@ -111,22 +56,7 @@ describe('OverlayViewer', () => {
     const onCloseOverlay = vi.fn()
 
     render(
-      <OverlayViewer
-        overlayOpen={true}
-        safeSvg="<svg />"
-        viewScale={1}
-        viewOffset={{ x: 0, y: 0 }}
-        isDragging={false}
-        overlayStageRef={{ current: null }}
-        onCloseOverlay={onCloseOverlay}
-        onOverlayZoomOut={() => undefined}
-        onOverlayZoomIn={() => undefined}
-        onResetOverlayView={() => undefined}
-        onFitOverlayView={() => undefined}
-        onOverlayMouseDown={() => undefined}
-        onOverlayMouseMove={() => undefined}
-        onOverlayMouseUp={() => undefined}
-      />,
+      <OverlayViewer {...makeOverlayViewerProps({ onCloseOverlay })} />,
     )
 
     fireEvent.click(screen.getByRole('dialog', { name: 'Backtrack viewer' }))

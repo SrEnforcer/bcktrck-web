@@ -1,4 +1,14 @@
+/**
+ * @module hooks/use-local-storage-persistence
+ *
+ * React hook that persists workspace UI preferences into localStorage.
+ * Side effects are isolated to storage writes and debug logging on failure.
+ *
+ * @packageDocumentation
+ */
+
 import { useEffect } from 'react'
+import { isErr, tryCatch } from '@tsfpp/prelude'
 import { debugLog } from '../logging/logger'
 
 type UseLocalStoragePersistenceInput = {
@@ -16,61 +26,69 @@ type UseLocalStoragePersistenceInput = {
   readonly stylePackChoice: string
 }
 
+const persistLocalStorage = (key: string, value: string, message: string): void => {
+  if (typeof window === 'undefined') return
+
+  const result = tryCatch(
+    () => {
+      window.localStorage.setItem(key, value)
+      return value
+    },
+    (cause) => cause,
+  )
+
+  if (isErr(result)) {
+    debugLog('storage', message, result.error)
+  }
+}
+
 /**
  * Persist user-editable workspace preferences into localStorage.
+ * @param input Storage keys and current UI values to persist.
+ * @returns Nothing.
  */
 export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInput): void => {
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.sourceStorageKey, input.source)
-    } catch (error) {
-      debugLog('storage', 'persist source failed', error)
-    }
+    persistLocalStorage(input.sourceStorageKey, input.source, 'persist source failed')
   }, [input.sourceStorageKey, input.source])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.editorPanelWidthStorageKey, String(input.editorPanelWidth))
-    } catch (error) {
-      debugLog('storage', 'persist editor panel width failed', error)
-    }
+    persistLocalStorage(
+      input.editorPanelWidthStorageKey,
+      String(input.editorPanelWidth),
+      'persist editor panel width failed',
+    )
   }, [input.editorPanelWidthStorageKey, input.editorPanelWidth])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.editorFontSizeStorageKey, String(input.editorFontSize))
-    } catch (error) {
-      debugLog('storage', 'persist editor font size failed', error)
-    }
+    persistLocalStorage(
+      input.editorFontSizeStorageKey,
+      String(input.editorFontSize),
+      'persist editor font size failed',
+    )
   }, [input.editorFontSizeStorageKey, input.editorFontSize])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.printPageFormatStorageKey, input.printPageFormat)
-    } catch (error) {
-      debugLog('storage', 'persist print page format failed', error)
-    }
+    persistLocalStorage(
+      input.printPageFormatStorageKey,
+      input.printPageFormat,
+      'persist print page format failed',
+    )
   }, [input.printPageFormatStorageKey, input.printPageFormat])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.themeStorageKey, input.themePreference)
-    } catch (error) {
-      debugLog('storage', 'persist theme preference failed', error)
-    }
+    persistLocalStorage(
+      input.themeStorageKey,
+      input.themePreference,
+      'persist theme preference failed',
+    )
   }, [input.themeStorageKey, input.themePreference])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(input.stylePackStorageKey, input.stylePackChoice)
-    } catch (error) {
-      debugLog('storage', 'persist style pack preference failed', error)
-    }
+    persistLocalStorage(
+      input.stylePackStorageKey,
+      input.stylePackChoice,
+      'persist style pack preference failed',
+    )
   }, [input.stylePackStorageKey, input.stylePackChoice])
 }

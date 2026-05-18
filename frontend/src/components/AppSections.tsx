@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 import type { SubtreeEntry } from '@bcktrck/engine'
-import { fromNullable, getOrElse, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, isSome, mapO, pipe } from '@tsfpp/prelude'
 import { Expand, Hand, Maximize2, Minus, Plus, RotateCcw, Square, X } from 'lucide-react'
 import type { RefObject } from 'react'
 import { BcktrckEditor } from './BcktrckEditor'
@@ -41,6 +41,8 @@ type WorkspaceTopbarProps = {
  * @param props Topbar render state and action callbacks.
  * @returns Topbar header element.
  */
+// DEVIATION(11.2): This presentational module currently groups workspace sections to keep cross-panel UI contracts co-located.
+// DEVIATION(11.1): Topbar render body remains expanded while extraction of toolbar micro-components is staged.
 export const WorkspaceTopbar = ({
   renderStatus,
   isRenderOk,
@@ -157,6 +159,7 @@ type EditorPanelProps = {
  * @param props Editor panel state and interaction callbacks.
  * @returns Editor panel element.
  */
+// DEVIATION(11.1): Editor panel keeps tab/render logic together to avoid prop-drilling churn during active feature work.
 export const EditorPanel = ({
   leftPanelTab,
   editorPanelWidth,
@@ -347,6 +350,7 @@ type PreviewPanelProps = {
  * @param props Preview state and viewport actions.
  * @returns Preview panel element.
  */
+// DEVIATION(11.1): Preview panel intentionally keeps controls and viewport markup together pending dedicated toolbar extraction.
 export const PreviewPanel = ({
   isResultOk,
   errorText,
@@ -431,7 +435,13 @@ export const PreviewPanel = ({
         onMouseMove={onPreviewMouseMove}
         onMouseUp={onPreviewMouseUp}
         onMouseLeave={onPreviewMouseUp}
-        style={{ cursor: previewMode === 'select' || rectSelect !== null || (isCtrlHeld && !isPreviewDragging) ? 'crosshair' : (isPreviewDragging ? 'grabbing' : 'grab') }}
+        style={{
+          cursor: previewMode === 'select'
+            || isSome(fromNullable(rectSelect))
+            || (isCtrlHeld && !isPreviewDragging)
+            ? 'crosshair'
+            : (isPreviewDragging ? 'grabbing' : 'grab')
+        }}
       >
         <div
           className="svg-fit"
@@ -443,20 +453,24 @@ export const PreviewPanel = ({
         >
           <img className="svg-fit-image" src={toSvgDataUri(safeSvg)} alt="" draggable={false} />
         </div>
-        {rectSelect !== null && (
-          <div
-            style={{
-              position: 'absolute',
-              left: Math.min(rectSelect.start.x, rectSelect.end.x),
-              top: Math.min(rectSelect.start.y, rectSelect.end.y),
-              width: Math.abs(rectSelect.end.x - rectSelect.start.x),
-              height: Math.abs(rectSelect.end.y - rectSelect.start.y),
-              border: '2px dashed #0b5fff',
-              background: 'rgba(11,95,255,0.08)',
-              pointerEvents: 'none',
-              zIndex: 10
-            }}
-          />
+        {pipe(
+          fromNullable(rectSelect),
+          mapO((selection) => (
+            <div
+              style={{
+                position: 'absolute',
+                left: Math.min(selection.start.x, selection.end.x),
+                top: Math.min(selection.start.y, selection.end.y),
+                width: Math.abs(selection.end.x - selection.start.x),
+                height: Math.abs(selection.end.y - selection.start.y),
+                border: '2px dashed #0b5fff',
+                background: 'rgba(11,95,255,0.08)',
+                pointerEvents: 'none',
+                zIndex: 10
+              }}
+            />
+          )),
+          getOrElse((): React.JSX.Element | null => null)
         )}
       </div>
     ) : (

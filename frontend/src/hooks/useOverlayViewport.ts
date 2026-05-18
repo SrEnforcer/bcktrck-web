@@ -1,4 +1,14 @@
+/**
+ * @module hooks/use-overlay-viewport
+ *
+ * React hook that controls pan/zoom interactions for the fullscreen SVG overlay.
+ * Keeps viewport math and pointer-state handling scoped to overlay behavior.
+ *
+ * @packageDocumentation
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { fromNullable, isNone } from '@tsfpp/prelude'
 import { clampScale, computeCenteredOffset, computeFitScale, computeReadableScale, type Point, type ViewBox, zoomOffsetAroundPivot } from '../lib/viewportMath'
 
 type UseOverlayViewportInput = {
@@ -47,13 +57,16 @@ export const useOverlayViewport = (input: UseOverlayViewportInput): UseOverlayVi
   }, [viewOffset])
 
   const setOverlayHomePosition = useCallback((mode: 'readable' | 'fit' = 'readable') => {
-    const stage = overlayStageRef.current
-    if (stage === null || input.viewBox === null) return
+    const stageOption = fromNullable(overlayStageRef.current)
+    const viewBoxOption = fromNullable(input.viewBox)
+    if (isNone(stageOption) || isNone(viewBoxOption)) return
+    const stage = stageOption.value
+    const viewBox = viewBoxOption.value
 
     const stageSize = { width: stage.clientWidth, height: stage.clientHeight }
-    const fitScale = computeFitScale(input.viewBox, stageSize)
+    const fitScale = computeFitScale(viewBox, stageSize)
     const targetScale = mode === 'fit' ? fitScale : computeReadableScale(fitScale)
-    const centeredOffset = computeCenteredOffset(input.viewBox, stageSize, targetScale)
+    const centeredOffset = computeCenteredOffset(viewBox, stageSize, targetScale)
 
     viewScaleRef.current = targetScale
     viewOffsetRef.current = centeredOffset
@@ -103,7 +116,8 @@ export const useOverlayViewport = (input: UseOverlayViewportInput): UseOverlayVi
       return
     }
 
-    if (input.viewBox === null || overlayAutoCenteredForOpenRef.current) return
+    const viewBoxOption = fromNullable(input.viewBox)
+    if (isNone(viewBoxOption) || overlayAutoCenteredForOpenRef.current) return
 
     const animationFrame = window.requestAnimationFrame(() => {
       setOverlayHomePosition('readable')
@@ -116,8 +130,9 @@ export const useOverlayViewport = (input: UseOverlayViewportInput): UseOverlayVi
   useEffect(() => {
     if (!overlayOpen) return
 
-    const element = overlayStageRef.current
-    if (element === null) return
+    const elementOption = fromNullable(overlayStageRef.current)
+    if (isNone(elementOption)) return
+    const element = elementOption.value
 
     const handler = (event: WheelEvent) => {
       event.preventDefault()
@@ -155,8 +170,9 @@ export const useOverlayViewport = (input: UseOverlayViewportInput): UseOverlayVi
   }, [])
 
   const zoomOverlayByFactor = useCallback((factor: number) => {
-    const stage = overlayStageRef.current
-    if (stage === null) return
+    const stageOption = fromNullable(overlayStageRef.current)
+    if (isNone(stageOption)) return
+    const stage = stageOption.value
     applyOverlayZoom(factor, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 })
   }, [applyOverlayZoom])
 

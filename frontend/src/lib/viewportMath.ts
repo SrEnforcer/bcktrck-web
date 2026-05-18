@@ -1,3 +1,11 @@
+/**
+ * @module lib/viewport-math
+ *
+ * Pure viewport geometry helpers used by preview and overlay pan/zoom interactions.
+ *
+ * @packageDocumentation
+ */
+
 /** Minimum allowed zoom scale. */
 export const minViewScale = 0.05
 /** Maximum allowed zoom scale. */

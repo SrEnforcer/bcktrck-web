@@ -5,12 +5,15 @@
  * folding, and theme setup. The pure helpers in this file are kept adjacent to
  * the registration boundary so editor behavior can be tested without invoking
  * Monaco itself.
+ *
+ * @packageDocumentation
  */
 
 import type * as Monaco from 'monaco-editor'
 import { fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
 
 const languageId = 'bcktrck'
+// DEVIATION(1.9): Monaco registration idempotency is tracked with WeakSet at the browser adapter boundary.
 const registeredMonacoInstances = new WeakSet<object>()
 const rootBlockPattern = /^(defs|style|config|org|links)\b/
 
@@ -22,7 +25,14 @@ export const bcktrckEditorTheme = {
   dark: 'bcktrck-dark'
 } as const
 
+/**
+ * Token rule tuple consumed by Monaco and test tokenizer helpers.
+ */
 export type BcktrckTokenRule = readonly [pattern: RegExp, token: string]
+
+/**
+ * Folding range shape exposed to tests.
+ */
 export type BcktrckFoldingRangeForTests = {
   readonly start: number
   readonly end: number
@@ -124,9 +134,6 @@ const collectFoldingRanges = (lines: readonly string[]): readonly BcktrckFolding
  * @returns The sequence of token names matched by `bcktrckTokenRules`.
  */
 export const tokenizeBcktrckTextForTests = (text: string): readonly string[] => {
-  const tokens: string[] = []
-  let cursor = 0
-
   const hasHeadMatch = (match: RegExpExecArray | null): boolean =>
     pipe(
       fromNullable(match),
@@ -134,7 +141,11 @@ export const tokenizeBcktrckTextForTests = (text: string): readonly string[] => 
       getOrElse(() => false)
     )
 
-  while (cursor < text.length) {
+  const scanTokens = (cursor: number, acc: readonly string[]): readonly string[] => {
+    if (cursor >= text.length) {
+      return acc
+    }
+
     const slice = text.slice(cursor)
     const matchedRule = bcktrckTokenRules.find(([pattern]) => {
       const match = pattern.exec(slice)
@@ -143,23 +154,20 @@ export const tokenizeBcktrckTextForTests = (text: string): readonly string[] => 
 
     const matchedRuleOption = fromNullable(matchedRule)
     if (isNone(matchedRuleOption)) {
-      cursor += 1
-      continue
+      return scanTokens(cursor + 1, acc)
     }
 
     const [pattern, token] = matchedRuleOption.value
     const match = pattern.exec(slice)
     const matchOption = fromNullable(match)
     if (isNone(matchOption) || matchOption.value[0].length === 0) {
-      cursor += 1
-      continue
+      return scanTokens(cursor + 1, acc)
     }
 
-    tokens.push(token)
-    cursor += matchOption.value[0].length
+    return scanTokens(cursor + matchOption.value[0].length, [...acc, token])
   }
 
-  return tokens
+  return scanTokens(0, [])
 }
 
 /**

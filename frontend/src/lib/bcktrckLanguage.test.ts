@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import { getBcktrckFoldingRangesForTests, tokenizeBcktrckTextForTests } from './bcktrckLanguage'
 
 describe('bcktrck language tokenizer', () => {
@@ -23,15 +24,39 @@ describe('bcktrck language tokenizer', () => {
     expect(tokenizeBcktrckTextForTests('  @maya:children')).toEqual(['white', 'variable'])
   })
 
-  it('highlights supported style declarations', () => {
+  it('highlights background-color declarations', () => {
     expect(tokenizeBcktrckTextForTests('    background-color: #e9fff0')).toEqual(['white', 'property', 'white', 'number.hex'])
+  })
+
+  it('highlights border-color declarations', () => {
     expect(tokenizeBcktrckTextForTests('    border-color: #223344')).toEqual(['white', 'property', 'white', 'number.hex'])
+  })
+
+  it('highlights border-style declarations', () => {
     expect(tokenizeBcktrckTextForTests('    border-style: dashed')).toEqual(['white', 'property', 'white', 'keyword.border-style'])
+  })
+
+  it('highlights border-width declarations', () => {
     expect(tokenizeBcktrckTextForTests('    border-width: 3')).toEqual(['white', 'property', 'white', 'number'])
+  })
+
+  it('highlights edge-style declarations', () => {
     expect(tokenizeBcktrckTextForTests('    edge-style: straight')).toEqual(['white', 'property', 'white', 'keyword.edge-style'])
+  })
+
+  it('highlights edge-width declarations', () => {
     expect(tokenizeBcktrckTextForTests('    edge-width: 1.5px')).toEqual(['white', 'property', 'white', 'number'])
+  })
+
+  it('highlights color declarations', () => {
     expect(tokenizeBcktrckTextForTests('    color: #4a4a4a')).toEqual(['white', 'property', 'white', 'number.hex'])
+  })
+
+  it('highlights font-size declarations', () => {
     expect(tokenizeBcktrckTextForTests('    font-size: 12px')).toEqual(['white', 'property', 'white', 'number'])
+  })
+
+  it('highlights font-weight declarations', () => {
     expect(tokenizeBcktrckTextForTests('    font-weight: bold')).toEqual(['white', 'property', 'white', 'keyword'])
   })
 
@@ -67,6 +92,14 @@ describe('bcktrck language tokenizer', () => {
     expect(tokenizeBcktrckTextForTests('title: CEO')).toEqual(['attribute.name', 'white'])
     expect(tokenizeBcktrckTextForTests(`org "Escaped ${slash}"Name${slash}""`)).toEqual(['keyword', 'white', 'string'])
   })
+
+  it('satisfies determinism law: tokenization is stable for the same input', () => {
+    fc.assert(
+      fc.property(fc.string(), (source) => {
+        expect(tokenizeBcktrckTextForTests(source)).toEqual(tokenizeBcktrckTextForTests(source))
+      }),
+    )
+  })
 })
 
 describe('bcktrck folding ranges', () => {
@@ -98,5 +131,17 @@ org "Acme"
     expect(getBcktrckFoldingRangesForTests(source)).toEqual([
       { start: 3, end: 4, kind: 'region' }
     ])
+  })
+
+  it('satisfies bounds law: each folding range stays within source lines', () => {
+    fc.assert(
+      fc.property(fc.array(fc.string(), { minLength: 1, maxLength: 30 }), (lines) => {
+        const source = lines.join('\n')
+        const lineCount = lines.length
+        const ranges = getBcktrckFoldingRangesForTests(source)
+
+        expect(ranges.every((range) => range.start >= 1 && range.end >= range.start && range.end <= lineCount)).toBe(true)
+      }),
+    )
   })
 })

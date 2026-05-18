@@ -1,43 +1,34 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { setupServer } from 'msw/node'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useCompiledSvg } from './useCompiledSvg'
+import {
+  makeApiUnavailableResolveErrors,
+  makeCompileParseErrorApiPayload,
+  makeCompileResolveErrorsApiPayload,
+  makeCompileSuccessApiPayload,
+  makeUseCompiledSvgInput,
+} from '../tests/factories/compileApi.factory'
 
 const server = setupServer()
 
-beforeAll(() => {
+beforeEach(() => {
   server.listen()
 })
 
 afterEach(() => {
   server.resetHandlers()
-})
-
-afterAll(() => {
   server.close()
 })
 
 describe('useCompiledSvg', () => {
   it('returns sanitized svg and clear error text when compile succeeds', async () => {
     server.use(
-      http.post('/api/compile', () =>
-        HttpResponse.json({
-          result: {
-            ok: true,
-            svg: '<svg><rect/></svg>',
-            viewBox: { x: 0, y: 0, width: 100, height: 80 },
-          },
-        })),
+      http.post('/api/compile', () => HttpResponse.json(makeCompileSuccessApiPayload())),
     )
 
-    const { result } = renderHook(() => useCompiledSvg({
-      source: 'org "Test"',
-      effectiveSubtreeId: undefined,
-      effectiveSubtreeIds: undefined,
-      styleSource: undefined,
-      ignoreSourceStyle: false,
-    }))
+    const { result } = renderHook(() => useCompiledSvg(makeUseCompiledSvgInput({ source: 'org "Test"' })))
 
     await waitFor(() => {
       expect(result.current.result.ok).toBe(true)
@@ -52,48 +43,22 @@ describe('useCompiledSvg', () => {
       http.post('/api/compile', () => HttpResponse.text('unavailable', { status: 503 })),
     )
 
-    const { result } = renderHook(() => useCompiledSvg({
-      source: 'org "Test"',
-      effectiveSubtreeId: undefined,
-      effectiveSubtreeIds: undefined,
-      styleSource: undefined,
-      ignoreSourceStyle: false,
-    }))
+    const { result } = renderHook(() => useCompiledSvg(makeUseCompiledSvgInput({ source: 'org "Test"' })))
 
     await waitFor(() => {
-      if (result.current.result.ok) {
-        throw new Error('Expected compile to fail')
-      }
-
-      expect(result.current.result.resolveErrors).toEqual([
-        { line: 0, col: 0, message: 'Compile API unavailable. Start @bcktrck/api and retry.' },
-      ])
+      expect(result.current.result).toMatchObject({
+        ok: false,
+        resolveErrors: makeApiUnavailableResolveErrors(),
+      })
     })
   })
 
   it('formats parse error context when parseError exists', async () => {
     server.use(
-      http.post('/api/compile', () =>
-        HttpResponse.json({
-          result: {
-            ok: false,
-            parseError: {
-              line: 1,
-              col: 5,
-              error: 'Expected indent',
-            },
-            resolveErrors: [],
-          },
-        })),
+      http.post('/api/compile', () => HttpResponse.json(makeCompileParseErrorApiPayload())),
     )
 
-    const { result } = renderHook(() => useCompiledSvg({
-      source: 'org "Test"',
-      effectiveSubtreeId: undefined,
-      effectiveSubtreeIds: undefined,
-      styleSource: undefined,
-      ignoreSourceStyle: false,
-    }))
+    const { result } = renderHook(() => useCompiledSvg(makeUseCompiledSvgInput({ source: 'org "Test"' })))
 
     await waitFor(() => {
       expect(result.current.errorText.includes('Parse error at 1:5')).toBe(true)
@@ -102,25 +67,10 @@ describe('useCompiledSvg', () => {
 
   it('formats resolve errors list when resolve errors exist', async () => {
     server.use(
-      http.post('/api/compile', () =>
-        HttpResponse.json({
-          result: {
-            ok: false,
-            parseError: null,
-            resolveErrors: [
-              { line: 2, col: 3, message: 'invalid ref' },
-            ],
-          },
-        })),
+      http.post('/api/compile', () => HttpResponse.json(makeCompileResolveErrorsApiPayload())),
     )
 
-    const { result } = renderHook(() => useCompiledSvg({
-      source: 'org "Test"',
-      effectiveSubtreeId: undefined,
-      effectiveSubtreeIds: undefined,
-      styleSource: undefined,
-      ignoreSourceStyle: false,
-    }))
+    const { result } = renderHook(() => useCompiledSvg(makeUseCompiledSvgInput({ source: 'org "Test"' })))
 
     await waitFor(() => {
       expect(result.current.errorText).toBe('- [2:3] invalid ref')

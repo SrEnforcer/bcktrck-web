@@ -1,5 +1,14 @@
+/**
+ * @module hooks/use-subtree-isolation
+ *
+ * React hook that derives subtree selection state and compile targets from
+ * source content plus user selection mode.
+ *
+ * @packageDocumentation
+ */
+
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, fromUnknownArrayOf, getNumberField, getOrElse, getStringField, isNone, isRecord, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, fromUnknownArrayOf, getNumberField, getOrElse, getStringField, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatchAsync } from '@tsfpp/prelude'
 import type { SubtreeEntry } from '@bcktrck/engine'
 import {
   buildParentMapFromPreorderDepth,
@@ -65,21 +74,36 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
   const [allSubtreeEntries, setAllSubtreeEntries] = useState<readonly SubtreeEntry[]>([])
 
   useEffect(() => {
+    // DEVIATION(1.9): AbortController is required to cancel in-flight browser fetch requests on dependency changes.
     const abortController = new AbortController()
 
     const loadSubtrees = async (): Promise<void> => {
-      const response = await fetch('/api/subtrees', {
+      const requestBody = {
+        source: input.source,
+        ignoreSourceStyle: input.ignoreSourceStyle,
+        ...pipe(
+          fromNullable(input.styleSource),
+          mapO((styleSource) => ({ styleSource })),
+          getOrElse(() => ({})),
+        ),
+      }
+
+      const responseResult = await tryCatchAsync(
+        () => fetch('/api/subtrees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: input.source,
-          styleSource: pipe(fromNullable(input.styleSource), getOrElse((): string | null => null)),
-          ignoreSourceStyle: input.ignoreSourceStyle,
-        }),
+          body: JSON.stringify(requestBody),
         signal: abortController.signal,
-      }).catch(() => undefined)
+        }),
+        (cause) => cause,
+      )
 
-      const responseOption = fromNullable(response)
+      if (!isOk(responseResult)) {
+        setAllSubtreeEntries([])
+        return
+      }
+
+      const responseOption = fromNullable(responseResult.value)
 
       const isResponseOk = pipe(
         responseOption,
@@ -95,13 +119,20 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
         return
       }
 
-      const payload = await responseOption.value.json().catch(() => undefined)
-      setAllSubtreeEntries(decodeEntries(payload))
+      const payloadResult = await tryCatchAsync(
+        () => responseOption.value.json(),
+        (cause) => cause,
+      )
+      setAllSubtreeEntries(isOk(payloadResult) ? decodeEntries(payloadResult.value) : [])
     }
 
-    loadSubtrees().catch(() => {
-      setAllSubtreeEntries([])
-    })
+    void tryCatchAsync(
+      loadSubtrees,
+      () => {
+        setAllSubtreeEntries([])
+        return undefined
+      },
+    )
 
     return () => {
       abortController.abort()

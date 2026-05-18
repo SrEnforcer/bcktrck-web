@@ -1,3 +1,11 @@
+/**
+ * @module lib/svg-sanitization
+ *
+ * Security-focused SVG sanitization helpers for untrusted compile output.
+ *
+ * @packageDocumentation
+ */
+
 import DOMPurify from 'dompurify'
 
 const svgSanitizeOptions = {
@@ -9,5 +17,7 @@ const svgSanitizeOptions = {
 
 /**
  * Sanitize untrusted SVG markup before rendering it in the UI.
+ * @param rawSvg Untrusted SVG string from compile responses.
+ * @returns Sanitized SVG markup safe for image rendering.
  */
 export const sanitizeSvgMarkup = (rawSvg: string): string => DOMPurify.sanitize(rawSvg, svgSanitizeOptions)

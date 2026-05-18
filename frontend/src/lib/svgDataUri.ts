@@ -1,4 +1,12 @@
 /**
+ * @module lib/svg-data-uri
+ *
+ * Convert sanitized SVG markup into browser-safe data URI strings.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * Convert sanitized SVG markup into a data URI for safe image rendering.
  * @param svgMarkup Sanitized SVG markup.
  * @returns Data URI usable in image `src` attributes.

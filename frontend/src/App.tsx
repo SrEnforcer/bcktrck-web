@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fromNullable, fromUnknownString, getOrElse, isRecord, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, fromUnknownString, getOrElse, isErr, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
 import { EditorPanel, OverlayViewer, PreviewPanel, WorkspaceTopbar } from './components/AppSections'
 import { debugLog } from './logging/logger'
 import { useCompiledSvg } from './hooks/useCompiledSvg'
@@ -121,18 +121,72 @@ const resolvePrintPageSize = (format: PrintPageFormat): string =>
     getOrElse(() => 'A4 landscape')
   )
 
-const readStoredNumber = (key: string, fallback: number): number => {
-  if (typeof window === 'undefined') return fallback
-  try {
-    const raw = pipe(
-      fromNullable(window.localStorage.getItem(key)),
-      getOrElse(() => String(fallback))
-    )
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? parsed : fallback
-  } catch {
-    return fallback
+const readLocalStorageItem = (key: string): string | null => {
+  if (typeof window === 'undefined') return null
+
+  const readResult = tryCatch(
+    () => window.localStorage.getItem(key),
+    () => null,
+  )
+
+  return isErr(readResult) ? null : readResult.value
+}
+
+const writeLocalStorageItem = (key: string, value: string, message: string): void => {
+  if (typeof window === 'undefined') return
+
+  const writeResult = tryCatch(
+    () => {
+      window.localStorage.setItem(key, value)
+      return value
+    },
+    (cause) => cause,
+  )
+
+  if (isErr(writeResult)) {
+    debugLog('storage', message, writeResult.error)
   }
+}
+
+const removeLocalStorageItem = (key: string): void => {
+  if (typeof window === 'undefined') return
+
+  const removeResult = tryCatch(
+    () => {
+      window.localStorage.removeItem(key)
+      return key
+    },
+    () => key,
+  )
+
+  if (isErr(removeResult)) {
+    // intentionally ignored for reset fallback behavior
+  }
+}
+
+const writeSessionStorageItem = (key: string, value: string): void => {
+  if (typeof window === 'undefined') return
+
+  const writeResult = tryCatch(
+    () => {
+      window.sessionStorage.setItem(key, value)
+      return value
+    },
+    (cause) => cause,
+  )
+
+  if (isErr(writeResult)) {
+    debugLog('storage', 'explicit session save failed', writeResult.error)
+  }
+}
+
+const readStoredNumber = (key: string, fallback: number): number => {
+  const raw = pipe(
+    fromNullable(readLocalStorageItem(key)),
+    getOrElse(() => String(fallback))
+  )
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 const trimEdgeEmptyLines = (value: string): string => value.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '')
@@ -152,38 +206,30 @@ const composeStyleSource = (parts: StylePackParts, styleBodyText: string): strin
   const defsText = trimEdgeEmptyLines(parts.defsText)
   const bodyText = trimEdgeEmptyLines(styleBodyText)
   const blocks = [
-    defsText.length > 0 ? defsText : undefined,
-    bodyText.length > 0 ? `style\n${bodyText}` : undefined
-  ].filter((block): block is string => block !== undefined)
+    ...(defsText.length > 0 ? [defsText] : []),
+    ...(bodyText.length > 0 ? [`style\n${bodyText}`] : []),
+  ]
   return blocks.length > 0 ? blocks.join('\n\n') : undefined
 }
 
 function App(): React.JSX.Element {
+  // DEVIATION(11.2): Root container remains intentionally large while ongoing extraction to feature modules is completed.
+  // DEVIATION(11.1): App orchestrates cross-panel state, viewport coordination, and persistence boundaries in one composition point.
   const [source, setSource] = useState(() => {
-    if (typeof window === 'undefined') return initialScript
-    try {
-      const persistedSource = window.localStorage.getItem(sourceStorageKey)
-      return pipe(
-        fromNullable(persistedSource),
-        getOrElse(() => initialScript)
-      )
-    } catch {
-      return initialScript
-    }
+    const persistedSource = readLocalStorageItem(sourceStorageKey)
+    return pipe(
+      fromNullable(persistedSource),
+      getOrElse(() => initialScript)
+    )
   })
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('source')
   const [stylePackChoice, setStylePackChoice] = useState<StylePackChoice>(() => {
-    if (typeof window === 'undefined') return 'inherit'
-    try {
-      const stored = window.localStorage.getItem(stylePackStorageKey)
-      const parsed = toStylePackChoice(stored)
-      return pipe(
-        fromNullable(parsed),
-        getOrElse((): StylePackChoice => 'inherit')
-      )
-    } catch {
-      return 'inherit'
-    }
+    const stored = readLocalStorageItem(stylePackStorageKey)
+    const parsed = toStylePackChoice(stored)
+    return pipe(
+      fromNullable(parsed),
+      getOrElse((): StylePackChoice => 'inherit')
+    )
   })
   const [styleEditorTextByChoice, setStyleEditorTextByChoice] = useState<Readonly<Partial<Record<StylePackChoice, string>>>>({})
   const [stylePackCache, setStylePackCache] = useState<Readonly<Record<string, string>>>({})
@@ -193,29 +239,38 @@ function App(): React.JSX.Element {
       return
     }
 
-    if (stylePackCache[stylePackChoice] !== undefined) {
+    if (isSome(fromNullable(stylePackCache[stylePackChoice]))) {
       return
     }
 
-    fetch('/api/style-pack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choice: stylePackChoice })
-    })
-      .then((response) => (response.ok ? response.json() : undefined))
-      .then((payload) => {
-        if (payload === undefined || !isRecord(payload)) {
-          return
-        }
+    void (async (): Promise<void> => {
+      const responseResult = await tryCatchAsync(
+        () => fetch('/api/style-pack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ choice: stylePackChoice })
+        }),
+        (cause) => cause,
+      )
+      if (!isOk(responseResult) || !responseResult.value.ok) {
+        return
+      }
 
-        const candidate = 'packText' in payload ? payload.packText : undefined
-        if (typeof candidate !== 'string') {
-          return
-        }
+      const payloadResult = await tryCatchAsync(
+        () => responseResult.value.json(),
+        (cause) => cause,
+      )
+      if (!isOk(payloadResult) || !isRecord(payloadResult.value)) {
+        return
+      }
 
-        setStylePackCache((previous) => ({ ...previous, [stylePackChoice]: candidate }))
-      })
-      .catch(() => undefined)
+      const candidate = 'packText' in payloadResult.value ? payloadResult.value.packText : undefined
+      if (typeof candidate !== 'string') {
+        return
+      }
+
+      setStylePackCache((previous) => ({ ...previous, [stylePackChoice]: candidate }))
+    })()
   }, [stylePackChoice, stylePackCache])
 
   const selectedStylePackText = useMemo(
@@ -272,30 +327,20 @@ function App(): React.JSX.Element {
   const [editorPanelWidth, setEditorPanelWidth] = useState(() => readStoredNumber(editorPanelWidthStorageKey, 42))
   const [editorFontSize, setEditorFontSize] = useState(() => readStoredNumber(editorFontSizeStorageKey, 14))
   const [printPageFormat, setPrintPageFormat] = useState<PrintPageFormat>(() => {
-    if (typeof window === 'undefined') return defaultPrintPageFormat
-    try {
-      const stored = window.localStorage.getItem(printPageFormatStorageKey)
-      const parsed = toPrintPageFormat(stored)
-      return pipe(
-        fromNullable(parsed),
-        getOrElse(() => defaultPrintPageFormat)
-      )
-    } catch {
-      return defaultPrintPageFormat
-    }
+    const stored = readLocalStorageItem(printPageFormatStorageKey)
+    const parsed = toPrintPageFormat(stored)
+    return pipe(
+      fromNullable(parsed),
+      getOrElse(() => defaultPrintPageFormat)
+    )
   })
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-    if (typeof window === 'undefined') return 'system'
-    try {
-      const stored = window.localStorage.getItem(themeStorageKey)
-      const parsed = toThemePreference(stored)
-      return pipe(
-        fromNullable(parsed),
-        getOrElse((): ThemePreference => 'system')
-      )
-    } catch {
-      return 'system'
-    }
+    const stored = readLocalStorageItem(themeStorageKey)
+    const parsed = toThemePreference(stored)
+    return pipe(
+      fromNullable(parsed),
+      getOrElse((): ThemePreference => 'system')
+    )
   })
   const { resolvedTheme } = useThemeEffects({ themePreference })
   const [undoStack, setUndoStack] = useState<ReadonlyArray<string>>([])
@@ -319,18 +364,13 @@ function App(): React.JSX.Element {
     ? 'Saved!'
     : result.ok
       ? 'Render OK'
-      : result.parseError !== undefined
+      : isSome(fromNullable(result.parseError))
         ? 'Parser issue'
         : 'Resolve issues'
 
   const handleExplicitSaveToSession = useCallback(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.sessionStorage.setItem(sessionSourceStorageKey, source)
-      setSavePulseToken((token) => token + 1)
-    } catch (error) {
-      debugLog('storage', 'explicit session save failed', error)
-    }
+    writeSessionStorageItem(sessionSourceStorageKey, source)
+    setSavePulseToken((token) => token + 1)
   }, [source])
 
   const handleExportSource = useCallback(() => {
@@ -347,8 +387,9 @@ function App(): React.JSX.Element {
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
     e.preventDefault()
-    const workspace = workspaceRef.current
-    if (!workspace) return
+    const workspaceOption = fromNullable(workspaceRef.current)
+    if (isNone(workspaceOption)) return
+    const workspace = workspaceOption.value
     setIsResizingPane(true)
     const onMove = (moveEvent: MouseEvent) => {
       const rect = workspace.getBoundingClientRect()
@@ -380,13 +421,7 @@ function App(): React.JSX.Element {
     const [previousSource, ...rest] = undoStack
     setSource(previousSource)
     setUndoStack(rest)
-    // Restore localStorage
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(sourceStorageKey, previousSource)
-    } catch {
-      // Ignore storage errors on undo.
-    }
+    writeLocalStorageItem(sourceStorageKey, previousSource, 'persist source failed')
   }, [undoStack])
 
   const handleStylePackChange = useCallback((nextValue: string) => {
@@ -417,12 +452,7 @@ function App(): React.JSX.Element {
     setSource(initialScript)
     // Remount Monaco so the uncontrolled model picks up reset content.
     setEditorInstanceKey((key) => key + 1)
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.removeItem(sourceStorageKey)
-    } catch {
-      // Ignore storage errors on reset.
-    }
+    removeLocalStorageItem(sourceStorageKey)
   }, [source])
 
   const handleSubtreeModeChange = useCallback((nextMode: 'context' | 'forest') => {
@@ -625,7 +655,6 @@ function App(): React.JSX.Element {
           styleEditorInstanceKey={styleEditorInstanceKey}
         />
 
-        {/* ── Resize handle ── */}
         <div
           className={`resize-handle${isResizingPane ? ' dragging' : ''}`}
           onMouseDown={handleResizeStart}

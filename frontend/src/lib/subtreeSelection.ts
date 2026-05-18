@@ -1,3 +1,11 @@
+/**
+ * @module lib/subtree-selection
+ *
+ * Pure helpers for subtree selection normalization and parent/ancestor derivation.
+ *
+ * @packageDocumentation
+ */
+
 import type { SubtreeEntry } from '@bcktrck/engine'
 import { entriesOfMap, flatMapO, fromNullable, getOrElse, intoMap, intoSet, isNone, lookup, mapO, member, pipe } from '@tsfpp/prelude'
 
