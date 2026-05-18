@@ -1,10 +1,22 @@
+/**
+ * @module api-server
+ *
+ * Node HTTP adapter for bcktrck API routes.
+ * Bridges Node transport details into fetch-compatible handlers with boundary-safe responses.
+ *
+ * @packageDocumentation
+ */
+
 import http from 'node:http'
 import { compileHandler } from './routes/compile'
 import { stylePackHandler } from './routes/stylePack'
 import { subtreesHandler } from './routes/subtrees'
+import { bodyBytes, toHeadersInit } from './httpAdapter'
 import {
   apiErrorToResponse,
+  baselineSecurityHeaders,
   extractContext,
+  mkValidationError,
   mkProblem,
   notFoundError,
   okResponse,
@@ -39,11 +51,12 @@ const rateLimitBuckets = new Map<string, RateLimitBucket>()
 
 const badRequest = (request: Request, code: string, title: string): Response => {
   const ctx = extractContext(request, '/api/*')
-  return problemResponse(mkProblem(400, code, title, ctx.traceId, { instance: ctx.url }))
+  return apiErrorToResponse(mkValidationError([{ field: 'body', issue: code }], title), ctx)
 }
 
 const payloadTooLarge = (request: Request): Response => {
   const ctx = extractContext(request, '/api/*')
+  // DEVIATION(8.1): Payload-too-large requires HTTP 413, which is not represented in the canonical ApiError taxonomy.
   return problemResponse(mkProblem(413, 'payload_too_large', 'Request payload exceeds configured limit', ctx.traceId, {
     instance: ctx.url,
   }))
@@ -87,11 +100,6 @@ const validateContentLength = (req: http.IncomingMessage): { readonly kind: 'ok'
 
   return parsedContentLength > maxBodyBytes ? { kind: 'too_large' } : { kind: 'ok' }
 }
-
-const bodyBytes = (chunks: ReadonlyArray<Buffer | string>): number => chunks.reduce(
-  (sum, chunk) => sum + (typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length),
-  0,
-)
 
 const getClientKey = (req: http.IncomingMessage): string => {
   const forwardedFor = req.headers['x-forwarded-for']
@@ -139,22 +147,6 @@ const computeRateLimitState = (key: string): { readonly state: RateLimitState; r
   return { state, exceeded: nextBucket.count > rateLimitMaxRequests }
 }
 
-const toHeadersInit = (headers: http.IncomingHttpHeaders): HeadersInit => {
-  const initialHeaders: Record<string, string> = {}
-
-  return Object.entries(headers).reduce((acc, [key, value]) => {
-    if (typeof value === 'string') {
-      return { ...acc, [key]: value }
-    }
-
-    if (Array.isArray(value) && value.length > 0) {
-      return { ...acc, [key]: value.join(',') }
-    }
-
-    return acc
-  }, initialHeaders)
-}
-
 const toFetchRequest = async (req: http.IncomingMessage): Promise<FetchRequestResult> => {
   const requestShell = toRequestShell(req)
   const method = requestShell.method
@@ -178,11 +170,11 @@ const toFetchRequest = async (req: http.IncomingMessage): Promise<FetchRequestRe
   const bodyBuffer = chunks.length > 0
     ? Buffer.concat(chunks.map((chunk) => (typeof chunk === 'string' ? Buffer.from(chunk) : chunk)))
     : undefined
-  const requestBody = pipe(
+  const requestBodyOption = pipe(
     fromNullable(bodyBuffer),
     mapO((value) => value.toString('utf8')),
-    getOrElse((): string | null => null)
   )
+  const requestBody = isNone(requestBodyOption) ? '' : requestBodyOption.value
 
   return {
     kind: 'request',
@@ -239,7 +231,11 @@ const writeResponse = async (
   response: Response,
   extraHeaders: Readonly<Record<string, string>>,
 ): Promise<void> => {
-  const headers = { ...extraHeaders, ...Object.fromEntries(response.headers.entries()) }
+  const headers = {
+    ...baselineSecurityHeaders,
+    ...extraHeaders,
+    ...Object.fromEntries(response.headers.entries())
+  }
   res.writeHead(response.status, headers)
 
   const body = await response.arrayBuffer()

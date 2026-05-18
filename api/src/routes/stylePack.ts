@@ -1,3 +1,12 @@
+/**
+ * @module api-routes-style-pack
+ *
+ * HTTP boundary adapter for style-pack lookup used by the bcktrck editor.
+ * Validates client input and maps engine lookup outcomes to boundary responses.
+ *
+ * @packageDocumentation
+ */
+
 import {
   apiErrorToResponse,
   extractContext,
@@ -7,14 +16,15 @@ import {
   type RawHandler,
 } from '@tsfpp/boundary'
 import { getStylePack } from '@bcktrck/engine'
-import { fromNullable, isNone } from '@tsfpp/prelude'
+import { fromNullable, isNone, isOk, tryCatchAsync } from '@tsfpp/prelude'
 import { z } from 'zod'
 
 const StylePackRequestSchema = z.object({
   choice: z.string().min(1),
 }).strict()
 
-const toBoundaryZodError = (
+// DEVIATION(8.2): @tsfpp/boundary@1.0.1 expects `errors` while Zod v4 exposes `issues`; this adapter preserves canonical fromZodError mapping.
+const toBoundaryZodLikeError = (
   issues: ReadonlyArray<z.ZodIssue>,
 ): {
   readonly errors: ReadonlyArray<{
@@ -38,11 +48,15 @@ const toBoundaryZodError = (
 export const stylePackHandler: RawHandler = async (req): Promise<Response> => {
   // PUBLIC: editor style-pack endpoint for local development.
   const ctx = extractContext(req, '/api/style-pack')
-  const rawBody = await req.json().catch(() => null)
+  const bodyResult = await tryCatchAsync(
+    () => req.json(),
+    (cause) => cause,
+  )
+  const rawBody = isOk(bodyResult) ? bodyResult.value : {}
   const parsedBody = StylePackRequestSchema.safeParse(rawBody)
 
   if (!parsedBody.success) {
-    return apiErrorToResponse(fromZodError(toBoundaryZodError(parsedBody.error.issues)), ctx)
+    return apiErrorToResponse(fromZodError(toBoundaryZodLikeError(parsedBody.error.issues)), ctx)
   }
 
   const packText = fromNullable(getStylePack(parsedBody.data.choice))

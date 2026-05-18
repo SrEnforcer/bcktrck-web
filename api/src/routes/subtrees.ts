@@ -1,3 +1,12 @@
+/**
+ * @module api-routes-subtrees
+ *
+ * HTTP boundary adapter for subtree extraction requests used by the bcktrck editor.
+ * Performs boundary validation and forwards typed options to the engine API.
+ *
+ * @packageDocumentation
+ */
+
 import {
   apiErrorToResponse,
   extractContext,
@@ -7,7 +16,7 @@ import {
   type RawHandler,
 } from '@tsfpp/boundary'
 import { listSubtreesFromSource } from '@bcktrck/engine'
-import { fromNullable, getOrElse, isErr, pipe, tryCatch } from '@tsfpp/prelude'
+import { isErr, isOk, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
 import { z } from 'zod'
 
 const SubtreesRequestSchema = z.object({
@@ -16,7 +25,8 @@ const SubtreesRequestSchema = z.object({
   ignoreSourceStyle: z.boolean(),
 }).strict()
 
-const toBoundaryZodError = (
+// DEVIATION(8.2): @tsfpp/boundary@1.0.1 expects `errors` while Zod v4 exposes `issues`; this adapter preserves canonical fromZodError mapping.
+const toBoundaryZodLikeError = (
   issues: ReadonlyArray<z.ZodIssue>,
 ): {
   readonly errors: ReadonlyArray<{
@@ -40,18 +50,27 @@ const toBoundaryZodError = (
 export const subtreesHandler: RawHandler = async (req): Promise<Response> => {
   // PUBLIC: editor subtree endpoint for local development.
   const ctx = extractContext(req, '/api/subtrees')
-  const rawBody = await req.json().catch(() => null)
+  const bodyResult = await tryCatchAsync(
+    () => req.json(),
+    (cause) => cause,
+  )
+  const rawBody = isOk(bodyResult) ? bodyResult.value : {}
   const parsedBody = SubtreesRequestSchema.safeParse(rawBody)
 
   if (!parsedBody.success) {
-    return apiErrorToResponse(fromZodError(toBoundaryZodError(parsedBody.error.issues)), ctx)
+    return apiErrorToResponse(fromZodError(toBoundaryZodLikeError(parsedBody.error.issues)), ctx)
+  }
+
+  const subtreeOptions: Readonly<{
+    readonly ignoreSourceStyle: boolean
+    readonly styleSource: string | null
+  }> = {
+    ignoreSourceStyle: parsedBody.data.ignoreSourceStyle,
+    styleSource: parsedBody.data.styleSource,
   }
 
   const entries = tryCatch(
-    () => listSubtreesFromSource(parsedBody.data.source, {
-      styleSource: pipe(fromNullable(parsedBody.data.styleSource), getOrElse((): string | undefined => undefined)),
-      ignoreSourceStyle: parsedBody.data.ignoreSourceStyle,
-    }),
+    () => listSubtreesFromSource(parsedBody.data.source, subtreeOptions),
     (cause) => internalError(cause),
   )
 

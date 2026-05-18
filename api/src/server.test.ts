@@ -1,8 +1,9 @@
 import { once } from 'node:events'
 import { promisify } from 'node:util'
 import type http from 'node:http'
-import { fromNullable, isNone } from '@tsfpp/prelude'
+import { fromNullable, isErr, isNone, tryCatchAsync } from '@tsfpp/prelude'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { makeCompileRequestBody } from './tests/factories/compileRequestBody.factory'
 
 const closeServer = async (server: http.Server): Promise<void> => {
   const close = promisify(server.close.bind(server))
@@ -16,21 +17,27 @@ const withServer = async (
 ): Promise<void> => {
   const { server, baseUrl } = await startTestServer(maxBodyBytes, maxRequests)
 
-  try {
-    await run(baseUrl)
-  } finally {
-    await closeServer(server)
-  }
+  const runResult = await tryCatchAsync(
+    () => run(baseUrl),
+    (cause) => cause,
+  )
+  const closeResult = await tryCatchAsync(
+    () => closeServer(server),
+    (cause) => cause,
+  )
+
+  expect(isErr(closeResult)).toBe(false)
+  expect(isErr(runResult)).toBe(false)
 }
 
 const startTestServer = async (
   maxBodyBytes: string,
   maxRequests: string,
 ): Promise<{ readonly server: http.Server; readonly baseUrl: string }> => {
-  process.env['NODE_ENV'] = 'test'
-  process.env['MAX_BODY_BYTES'] = maxBodyBytes
-  process.env['RATE_LIMIT_MAX_REQUESTS'] = maxRequests
-  process.env['RATE_LIMIT_WINDOW_MS'] = '60000'
+  vi.stubEnv('NODE_ENV', 'test')
+  vi.stubEnv('MAX_BODY_BYTES', maxBodyBytes)
+  vi.stubEnv('RATE_LIMIT_MAX_REQUESTS', maxRequests)
+  vi.stubEnv('RATE_LIMIT_WINDOW_MS', '60000')
 
   vi.resetModules()
   const mod = await import('./server')
@@ -56,18 +63,22 @@ const startTestServer = async (
 }
 
 afterEach(() => {
-  delete process.env['MAX_BODY_BYTES']
-  delete process.env['RATE_LIMIT_MAX_REQUESTS']
-  delete process.env['RATE_LIMIT_WINDOW_MS']
+  vi.unstubAllEnvs()
 })
 
 describe('api server', () => {
-  it('routes health endpoint and unknown endpoint', async () => {
+  it('returns 200 for the health endpoint', async () => {
     await withServer('262144', '120', async (baseUrl) => {
       const health = await fetch(`${baseUrl}/api/health`)
-      const unknown = await fetch(`${baseUrl}/api/unknown`)
 
       expect(health.status).toBe(200)
+    })
+  })
+
+  it('returns 404 for an unknown endpoint', async () => {
+    await withServer('262144', '120', async (baseUrl) => {
+      const unknown = await fetch(`${baseUrl}/api/unknown`)
+
       expect(unknown.status).toBe(404)
     })
   })
@@ -77,13 +88,7 @@ describe('api server', () => {
       const res = await fetch(`${baseUrl}/api/compile`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          source: 'x'.repeat(300),
-          effectiveSubtreeId: null,
-          effectiveSubtreeIds: null,
-          styleSource: null,
-          ignoreSourceStyle: false,
-        }),
+        body: JSON.stringify(makeCompileRequestBody({ source: 'x'.repeat(300) })),
       })
 
       expect(res.status).toBe(413)

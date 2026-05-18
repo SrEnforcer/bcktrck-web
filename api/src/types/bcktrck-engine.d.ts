@@ -1,3 +1,12 @@
+/**
+ * @module bcktrck-engine-types
+ *
+ * Local declaration contract for @bcktrck/engine used by API handlers and tests.
+ * Documents the minimal public shape consumed by this workspace.
+ *
+ * @packageDocumentation
+ */
+
 declare module '@bcktrck/engine' {
   /**
    * Parser error produced by the engine parser.
@@ -51,8 +60,8 @@ declare module '@bcktrck/engine' {
    */
   export type CompileErr = {
     readonly ok: false
-    readonly parseError: ParseErr | undefined
-    readonly resolveErrors: readonly ResolveError[] | undefined
+    readonly parseError: ParseErr | null
+    readonly resolveErrors: readonly ResolveError[] | null
   }
 
   /**
@@ -64,10 +73,10 @@ declare module '@bcktrck/engine' {
    * Compile options accepted by the engine.
    */
   export type CompileOptions = {
-    readonly subtreeId: string | undefined
-    readonly subtreeIds: readonly string[] | undefined
-    readonly styleSource: string | undefined
-    readonly ignoreSourceStyle: boolean | undefined
+    readonly subtreeId: string | null
+    readonly subtreeIds: readonly string[] | null
+    readonly styleSource: string | null
+    readonly ignoreSourceStyle: boolean | null
   }
 
   /**
@@ -84,8 +93,8 @@ declare module '@bcktrck/engine' {
    */
   export const compile: (
     source: string,
-    renderConfig: RenderConfig | undefined,
-    options: Partial<CompileOptions> | undefined
+    renderConfig: RenderConfig | null,
+    options: Partial<CompileOptions> | null
   ) => CompileResult
   /**
    * List subtree entries from source for selection UIs.
@@ -95,12 +104,12 @@ declare module '@bcktrck/engine' {
    */
   export const listSubtreesFromSource: (
     source: string,
-    options: Pick<CompileOptions, 'styleSource' | 'ignoreSourceStyle'> | undefined
+    options: Pick<CompileOptions, 'styleSource' | 'ignoreSourceStyle'> | null
   ) => readonly SubtreeEntry[]
   /**
    * Resolve a named style pack.
    * @param name Style pack name.
    * @returns Style pack text when found.
    */
-  export const getStylePack: (name: string) => string | undefined
+  export const getStylePack: (name: string) => string | null
 }
