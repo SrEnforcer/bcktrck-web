@@ -1,3 +1,7 @@
 packages:
   - frontend
   - api
+allowBuilds:
+  core-js: true
+  esbuild: true
+  msw: true

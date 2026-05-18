@@ -1,0 +1,7 @@
+#!/bin/sh
+# Runs the type and lint gates on the full project before each commit.
+# Mirrors the CI check suite — if it fails here, it will fail in CI.
+#
+# For this workspace, rely on the unified check script which already
+# runs package-aware typecheck, lint, and tests.
+pnpm check

@@ -26,7 +26,7 @@ Canonical source: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md` — whe
 - `default:` in an exhaustive switch — use `absurd(x)` instead
 - `import from 'ramda'` — use `@tsfpp/prelude`
 - `new Map()` `new Set()` — use `intoMap` / `intoSet` from `@tsfpp/prelude`
-- `if (x === null)` `if (x === undefined)` `x ?? y` — use `fromNullable` / `getOrElse`
+- `if (x === null)` `if (x !== null)` `if (x === undefined)` `if (x !== undefined)` `if (!x)` `x ?? y` — any nullability check in any form; use `fromNullable` → `Option<T>`, then `isSome` / `isNone` / `getOrElse`
 - `try/catch` in core — use `tryCatch` / `tryCatchAsync` from `@tsfpp/prelude`
 
 ## Always
