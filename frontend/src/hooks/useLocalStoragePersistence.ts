@@ -49,14 +49,14 @@ const persistLocalStorage = (key: string, value: string, message: string): void 
  */
 export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInput): void => {
   useEffect(() => {
-    persistLocalStorage(input.sourceStorageKey, input.source, 'persist source failed')
+    persistLocalStorage(input.sourceStorageKey, input.source, 'storage.local.source.persist.failed')
   }, [input.sourceStorageKey, input.source])
 
   useEffect(() => {
     persistLocalStorage(
       input.editorPanelWidthStorageKey,
       String(input.editorPanelWidth),
-      'persist editor panel width failed',
+      'storage.local.editor_panel_width.persist.failed',
     )
   }, [input.editorPanelWidthStorageKey, input.editorPanelWidth])
 
@@ -64,7 +64,7 @@ export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInpu
     persistLocalStorage(
       input.editorFontSizeStorageKey,
       String(input.editorFontSize),
-      'persist editor font size failed',
+      'storage.local.editor_font_size.persist.failed',
     )
   }, [input.editorFontSizeStorageKey, input.editorFontSize])
 
@@ -72,7 +72,7 @@ export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInpu
     persistLocalStorage(
       input.printPageFormatStorageKey,
       input.printPageFormat,
-      'persist print page format failed',
+      'storage.local.print_page_format.persist.failed',
     )
   }, [input.printPageFormatStorageKey, input.printPageFormat])
 
@@ -80,7 +80,7 @@ export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInpu
     persistLocalStorage(
       input.themeStorageKey,
       input.themePreference,
-      'persist theme preference failed',
+      'storage.local.theme_preference.persist.failed',
     )
   }, [input.themeStorageKey, input.themePreference])
 
@@ -88,7 +88,7 @@ export const useLocalStoragePersistence = (input: UseLocalStoragePersistenceInpu
     persistLocalStorage(
       input.stylePackStorageKey,
       input.stylePackChoice,
-      'persist style pack preference failed',
+      'storage.local.style_pack_preference.persist.failed',
     )
   }, [input.stylePackStorageKey, input.stylePackChoice])
 }

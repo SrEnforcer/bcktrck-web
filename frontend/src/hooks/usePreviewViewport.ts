@@ -122,12 +122,12 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
 
   useEffect(() => {
     previewScaleRef.current = previewScale
-    writeSessionStorage(sessionZoomKey, String(previewScale), 'persist preview zoom failed')
+    writeSessionStorage(sessionZoomKey, String(previewScale), 'storage.session.preview_zoom.persist.failed')
   }, [previewScale])
 
   useEffect(() => {
     previewOffsetRef.current = previewOffset
-    writeSessionStorage(sessionOffsetKey, JSON.stringify(previewOffset), 'persist preview offset failed')
+    writeSessionStorage(sessionOffsetKey, JSON.stringify(previewOffset), 'storage.session.preview_offset.persist.failed')
   }, [previewOffset])
 
   const handlePreviewModePan = useCallback(() => {

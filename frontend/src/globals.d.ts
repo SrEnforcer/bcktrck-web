@@ -27,7 +27,7 @@ declare module '@bcktrck/engine' {
 	 * Subtree metadata returned by the engine for selection UIs.
 	 */
 	export type SubtreeEntry = {
-		readonly kind: 'employee' | 'department' | 'vacancy'
+		readonly kind: string
 		readonly id: string
 		readonly label: string
 		readonly depth: number

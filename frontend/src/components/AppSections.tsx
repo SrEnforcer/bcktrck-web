@@ -301,7 +301,7 @@ export const EditorPanel = ({
             </div>
           </div>
         ) : (
-          <div className="subtree-empty">No department nodes available for subtree isolation.</div>
+          <div className="subtree-empty">No subtree nodes available for isolation.</div>
         )}
       </section>
     )}

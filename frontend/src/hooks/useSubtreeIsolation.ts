@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, fromUnknownArrayOf, getNumberField, getOrElse, getStringField, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getStringField, isOk, isRecord, isSome, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
 import type { SubtreeEntry } from '@bcktrck/engine'
 import {
   buildParentMapFromPreorderDepth,
@@ -46,21 +46,85 @@ export type UseSubtreeIsolationResult = {
   readonly effectiveSubtreeIds: readonly string[] | undefined
 }
 
-const isSubtreeEntry = (value: unknown): value is SubtreeEntry => {
-  if (!isRecord(value)) return false
-  const kind = getStringField(value, 'kind')
-  const id = getStringField(value, 'id')
-  const label = getStringField(value, 'label')
-  const depth = getNumberField(value, 'depth')
-  const validKind = isSome(kind) && (kind.value === 'employee' || kind.value === 'department' || kind.value === 'vacancy')
+const toPreferredSubtreeEntries = (entries: readonly SubtreeEntry[]): readonly SubtreeEntry[] => {
+  const departmentEntries = entries.filter((entry) => entry.kind === 'department')
+  return departmentEntries.length > 0 ? departmentEntries : entries
+}
 
-  return validKind && isSome(id) && isSome(label) && isSome(depth)
+const decodeSubtreeEntry = (value: unknown): SubtreeEntry | undefined => {
+  if (!isRecord(value)) return undefined
+
+  const id = pipe(
+    getStringField(value, 'id'),
+    (first) => (isSome(first) ? first : getStringField(value, 'nodeId')),
+    (second) => (isSome(second) ? second : getStringField(value, 'handle')),
+  )
+  const label = pipe(
+    getStringField(value, 'label'),
+    (first) => (isSome(first) ? first : getStringField(value, 'name')),
+    (second) => (isSome(second) ? second : getStringField(value, 'title')),
+  )
+  const depth = pipe(
+    getNumberField(value, 'depth'),
+    (first) => (isSome(first) ? first : getNumberField(value, 'level')),
+  )
+  const kind = pipe(
+    getStringField(value, 'kind'),
+    (first) => (isSome(first) ? first : getStringField(value, 'type')),
+  )
+
+  if (!isSome(id) || !isSome(label) || !isSome(depth)) {
+    return undefined
+  }
+
+  return {
+    id: id.value,
+    label: label.value,
+    depth: depth.value,
+    kind: isSome(kind) && kind.value.length > 0 ? kind.value : 'node',
+  }
+}
+
+const decodeEntriesFromField = (value: unknown, field: string): readonly SubtreeEntry[] => {
+  if (!isRecord(value)) return []
+  if (!Array.isArray(value[field])) return []
+
+  return value[field].flatMap((item) => {
+    const decoded = decodeSubtreeEntry(item)
+    return decoded ? [decoded] : []
+  })
 }
 
 const decodeEntries = (value: unknown): readonly SubtreeEntry[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const decoded = decodeSubtreeEntry(item)
+      return decoded ? [decoded] : []
+    })
+  }
+
+  const entries = decodeEntriesFromField(value, 'entries')
+  if (entries.length > 0) return entries
+
+  const nodes = decodeEntriesFromField(value, 'nodes')
+  if (nodes.length > 0) return nodes
+
+  const subtrees = decodeEntriesFromField(value, 'subtrees')
+  if (subtrees.length > 0) return subtrees
+
   if (!isRecord(value)) return []
-  const entries = fromUnknownArrayOf(isSubtreeEntry)(value.entries)
-  return isSome(entries) ? entries.value : []
+
+  const nestedResultEntries = decodeEntriesFromField(value.result, 'entries')
+  return nestedResultEntries.length > 0 ? nestedResultEntries : decodeEntriesFromField(value.result, 'nodes')
+}
+
+const isAbortLikeError = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const name = getStringField(value, 'name')
+  return isSome(name) && name.value === 'AbortError'
 }
 
 /**
@@ -80,12 +144,8 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
     const loadSubtrees = async (): Promise<void> => {
       const requestBody = {
         source: input.source,
+        styleSource: pipe(fromNullable(input.styleSource), toNullable),
         ignoreSourceStyle: input.ignoreSourceStyle,
-        ...pipe(
-          fromNullable(input.styleSource),
-          mapO((styleSource) => ({ styleSource })),
-          getOrElse(() => ({})),
-        ),
       }
 
       const responseResult = await tryCatchAsync(
@@ -99,37 +159,34 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
       )
 
       if (!isOk(responseResult)) {
-        setAllSubtreeEntries([])
+        if (isAbortLikeError(responseResult.error)) {
+          return
+        }
         return
       }
 
-      const responseOption = fromNullable(responseResult.value)
+      const response = responseResult.value
 
-      const isResponseOk = pipe(
-        responseOption,
-        mapO((candidate) => candidate.ok),
-        getOrElse(() => false)
-      )
-      if (!isResponseOk) {
-        setAllSubtreeEntries([])
-        return
-      }
-
-      if (isNone(responseOption)) {
+      if (!response.ok) {
         return
       }
 
       const payloadResult = await tryCatchAsync(
-        () => responseOption.value.json(),
+        () => response.json(),
         (cause) => cause,
       )
-      setAllSubtreeEntries(isOk(payloadResult) ? decodeEntries(payloadResult.value) : [])
+
+      if (!isOk(payloadResult)) {
+        return
+      }
+
+      const decodedEntries = decodeEntries(payloadResult.value)
+      setAllSubtreeEntries(decodedEntries)
     }
 
     void tryCatchAsync(
       loadSubtrees,
       () => {
-        setAllSubtreeEntries([])
         return undefined
       },
     )
@@ -140,7 +197,7 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
   }, [input.source, input.styleSource, input.ignoreSourceStyle])
 
   const subtreeEntries = useMemo<readonly SubtreeEntry[]>(
-    () => allSubtreeEntries.filter((entry) => entry.kind === 'department'),
+    () => toPreferredSubtreeEntries(allSubtreeEntries),
     [allSubtreeEntries]
   )
 

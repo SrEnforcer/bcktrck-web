@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, getNumberField, getOrElse, getStringField, getTypedField, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getOrElse, getStringField, getTypedField, isOk, isRecord, isSome, mapO, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
 import { sanitizeSvgMarkup } from '../lib/svgSanitization'
 
 type ParseError = {
@@ -44,6 +44,15 @@ const initialCompileResult: CompileResult = {
   ok: false,
   parseError: undefined,
   resolveErrors: [],
+}
+
+const isAbortLikeError = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const name = getStringField(value, 'name')
+  return isSome(name) && name.value === 'AbortError'
 }
 
 const decodeParseError = (value: unknown): ParseError | undefined => {
@@ -203,22 +212,10 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
     const loadCompileResult = async (): Promise<void> => {
       const requestBody = {
         source: input.source,
+        effectiveSubtreeId: pipe(fromNullable(input.effectiveSubtreeId), toNullable),
+        effectiveSubtreeIds: pipe(fromNullable(input.effectiveSubtreeIds), toNullable),
+        styleSource: pipe(fromNullable(input.styleSource), toNullable),
         ignoreSourceStyle: input.ignoreSourceStyle,
-        ...pipe(
-          fromNullable(input.effectiveSubtreeId),
-          mapO((effectiveSubtreeId) => ({ effectiveSubtreeId })),
-          getOrElse(() => ({})),
-        ),
-        ...pipe(
-          fromNullable(input.effectiveSubtreeIds),
-          mapO((effectiveSubtreeIds) => ({ effectiveSubtreeIds })),
-          getOrElse(() => ({})),
-        ),
-        ...pipe(
-          fromNullable(input.styleSource),
-          mapO((styleSource) => ({ styleSource })),
-          getOrElse(() => ({})),
-        ),
       }
 
       const responseResult = await tryCatchAsync(
@@ -232,6 +229,10 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
       )
 
       if (!isOk(responseResult)) {
+        if (isAbortLikeError(responseResult.error)) {
+          return
+        }
+
         setResult({
           ok: false,
           parseError: undefined,
@@ -242,14 +243,9 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
         return
       }
 
-      const responseOption = fromNullable(responseResult.value)
+      const response = responseResult.value
 
-      const isResponseOk = pipe(
-        responseOption,
-        mapO((candidate) => candidate.ok),
-        getOrElse(() => false)
-      )
-      if (!isResponseOk) {
+      if (!response.ok) {
         setResult({
           ok: false,
           parseError: undefined,
@@ -257,15 +253,11 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
             { line: 0, col: 0, message: 'Compile API unavailable. Start @bcktrck/api and retry.' },
           ],
         })
-        return
-      }
-
-      if (isNone(responseOption)) {
         return
       }
 
       const payloadResult = await tryCatchAsync(
-        () => responseOption.value.json(),
+        () => response.json(),
         (cause) => cause,
       )
       if (!isOk(payloadResult)) {
@@ -291,7 +283,11 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
 
     void tryCatchAsync(
       loadCompileResult,
-      () => {
+      (cause) => {
+        if (isAbortLikeError(cause)) {
+          return undefined
+        }
+
         setResult({
           ok: false,
           parseError: undefined,

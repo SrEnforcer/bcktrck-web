@@ -176,7 +176,7 @@ const writeSessionStorageItem = (key: string, value: string): void => {
   )
 
   if (isErr(writeResult)) {
-    debugLog('storage', 'explicit session save failed', writeResult.error)
+    debugLog('storage', 'storage.session.save.failed', writeResult.error)
   }
 }
 
@@ -421,7 +421,7 @@ function App(): React.JSX.Element {
     const [previousSource, ...rest] = undoStack
     setSource(previousSource)
     setUndoStack(rest)
-    writeLocalStorageItem(sourceStorageKey, previousSource, 'persist source failed')
+    writeLocalStorageItem(sourceStorageKey, previousSource, 'storage.local.source.persist.failed')
   }, [undoStack])
 
   const handleStylePackChange = useCallback((nextValue: string) => {
@@ -582,7 +582,7 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (result.ok) {
-      debugLog('compile', 'compile success', {
+      debugLog('compile', 'compile.render.succeeded', {
         sourceLineCount,
         subtreeMode: subtreeIsolationMode,
         selectedSubtreeIds: normalizedSelectedSubtreeIds,
@@ -593,7 +593,18 @@ function App(): React.JSX.Element {
       return
     }
 
-    debugLog('compile', 'compile error', {
+    const hasParseError = isSome(fromNullable(result.parseError))
+    const hasResolveErrors = pipe(
+      fromNullable(result.resolveErrors),
+      mapO((errors) => errors.length > 0),
+      getOrElse(() => false)
+    )
+
+    if (!hasParseError && !hasResolveErrors) {
+      return
+    }
+
+    debugLog('compile', 'compile.render.failed', {
       sourceLineCount,
       subtreeMode: subtreeIsolationMode,
       selectedSubtreeIds: normalizedSelectedSubtreeIds,

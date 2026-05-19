@@ -7,31 +7,55 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, mapO, pipe } from '@tsfpp/prelude'
+import { type LogEntry, type Logger, fromNullable, getOrElse, mapO, pipe } from '@tsfpp/prelude'
+
+const writeDebug = (entry: LogEntry): void => {
+  if (!__BCKTRCK_DEBUG__) return
+
+  void import('consola').then(({ createConsola }) => {
+    const logger = createConsola({ level: 4 }).withTag('web')
+    logger.debug(entry)
+  })
+}
+
+const browserLogger: Logger = {
+  debug: writeDebug,
+  info: writeDebug,
+  warn: writeDebug,
+  error: writeDebug,
+}
+
+const toPayloadString = (payload: unknown): string => {
+  if (payload instanceof Error) {
+    return payload.message
+  }
+
+  if (typeof payload === 'string') {
+    return payload
+  }
+
+  return JSON.stringify(payload)
+}
+
+const toPayloadField = (payload: unknown): Readonly<Record<string, unknown>> => pipe(
+  fromNullable(payload),
+  mapO((value) => ({ payload: toPayloadString(value) })),
+  getOrElse(() => ({})),
+)
 
 /**
  * Emit structured debug logs when debug mode is enabled.
  * @param tag Logical logger tag.
- * @param event Event description.
+ * @param event Dot-separated event name.
  * @param payload Payload for diagnostics. Pass `undefined` when no payload is available.
  * @returns Nothing.
  */
 export const debugLog = (tag: string, event: string, payload: unknown): void => {
-  if (!__BCKTRCK_DEBUG__) return
+  const entry: LogEntry = {
+    message: event,
+    code: tag,
+    ...toPayloadField(payload),
+  }
 
-  void import('consola').then(({ createConsola }) => {
-    const logger = createConsola({ level: 4 }).withTag(`web:${tag}`)
-    const hasPayload = pipe(
-      fromNullable(payload),
-      mapO((value) => {
-        logger.debug(event, value)
-        return true
-      }),
-      getOrElse(() => false)
-    )
-
-    if (!hasPayload) {
-      logger.debug(event)
-    }
-  })
+  browserLogger.debug(entry)
 }
