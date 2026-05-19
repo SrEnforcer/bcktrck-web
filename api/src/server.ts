@@ -9,6 +9,7 @@
 
 import http from 'node:http'
 import { compileHandler } from './routes/compile'
+import { parseApiConfig } from './config'
 import { stylePackHandler } from './routes/stylePack'
 import { subtreesHandler } from './routes/subtrees'
 import { bodyBytes, toHeadersInit } from './httpAdapter'
@@ -26,15 +27,22 @@ import {
   type RateLimitState,
   type RawHandler,
 } from '@tsfpp/boundary'
-import { fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, isErr, isNone, mapO, pipe } from '@tsfpp/prelude'
 
-const host = pipe(fromNullable(process.env['HOST']), getOrElse(() => '0.0.0.0'))
-const portValue = pipe(fromNullable(process.env['PORT']), getOrElse(() => '8787'))
-const port = Number.parseInt(portValue, 10)
-const maxBodyBytes = Number.parseInt(pipe(fromNullable(process.env['MAX_BODY_BYTES']), getOrElse(() => '262144')), 10)
-const requestTimeoutMs = Number.parseInt(pipe(fromNullable(process.env['REQUEST_TIMEOUT_MS']), getOrElse(() => '10000')), 10)
-const rateLimitWindowMs = Number.parseInt(pipe(fromNullable(process.env['RATE_LIMIT_WINDOW_MS']), getOrElse(() => '60000')), 10)
-const rateLimitMaxRequests = Number.parseInt(pipe(fromNullable(process.env['RATE_LIMIT_MAX_REQUESTS']), getOrElse(() => '120')), 10)
+const configResult = parseApiConfig(process.env)
+
+if (isErr(configResult)) {
+  process.stderr.write(`[bcktrck-api] invalid config: ${configResult.error.summary}\n`)
+  process.exit(1)
+}
+
+const config = configResult.value
+const host = config.host
+const port = config.port
+const maxBodyBytes = config.maxBodyBytes
+const requestTimeoutMs = config.requestTimeoutMs
+const rateLimitWindowMs = config.rateLimitWindowMs
+const rateLimitMaxRequests = config.rateLimitMaxRequests
 
 type RateLimitBucket = {
   readonly count: number
@@ -283,7 +291,7 @@ export const createApiServer = (): http.Server => http.createServer(
 
 const server = createApiServer()
 
-if (process.env['NODE_ENV'] !== 'test') {
+if (config.nodeEnv !== 'test') {
   server.listen(port, host, () => {
     const endpoint = `http://${host}:${port}`
     process.stdout.write(`[bcktrck-api] listening on ${endpoint}\n`)
