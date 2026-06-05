@@ -135,6 +135,18 @@ When adding inline comments, apply the same test: does this tell the reader
 something they cannot derive from the code and types alone? If not, omit it.
 
 ---
+## MCP tools
+
+The `@tsfpp/mcp-server` is available. Use these tools before relying on memory:
+
+- Unsure of the canonical pattern → `get_pattern({ concept })`
+- Need a DEVIATION comment → `get_deviation({ ruleId, reason })` — never write a DEVIATION comment without calling this first
+- Want to verify code is compliant → `check_pattern({ code })`
+- Need layer constraints → `get_layer({ layer })`
+- Need a specific rule → `get_rule({ id })`
+
+---
+
 ## Prelude-first
 
 Before writing any implementation, check `@tsfpp/prelude` for available symbols.
@@ -211,6 +223,20 @@ Define or adjust ADTs and branded/refined types. Add smart constructors (`mk*`, 
 Confirm failing tests exist (via the TDD gate above). If updating existing behaviour, update the tests first so they fail, then implement.
 Do not add new tests for new behaviour here — that is `tsfpp-tdd`'s job.
 
+When writing or updating test code, always use AAA structure with a blank line between each phase:
+
+```ts
+it('returns None when the input is empty', () => {
+  const raw = ''                 // Arrange
+
+  const result = mkUserId(raw)   // Act
+
+  expect(result).toEqual(none)   // Assert
+})
+```
+
+Never collapse these blank lines. Never use `if (isSome(...))` or `if (isOk(...))` as guards — assert with `toEqual(some(...))` / `toEqual(ok(...))` directly.
+
 **Step 4 — Implement**
 Keep changes local and compositional. Do not refactor unrelated code.
 
@@ -227,11 +253,17 @@ Do not fabricate tool outcomes.
 ## Escalation policy
 
 Pause and ask when:
-1. A MUST rule would need to be violated
-2. Requirements are underspecified and would force invented domain behaviour
-3. A change is risky without explicit boundary contracts
+1. Requirements are underspecified and would force invented domain behaviour
+2. A change is risky without explicit boundary contracts
 
 Provide: blocking condition · minimal clarification needed · one safe fallback.
+
+**Never pause to ask permission to fix a violation you have already identified.**
+If you know the correct fix, apply it. Do not leave the codebase in a broken state
+and ask "would you like me to fix this?" — that is not a choice to offer.
+
+The only legitimate reason to pause is genuine ambiguity about *what* to build,
+not uncertainty about *how* to fix a known violation.
 
 ---
 
@@ -249,6 +281,7 @@ Provide: blocking condition · minimal clarification needed · one safe fallback
 - [ ] Exhaustive matching with `absurd` present
 - [ ] No forbidden constructs introduced
 - [ ] All exports in changed files have JSDoc
+- [ ] `check_pattern` run on all modified files — zero mechanical violations reported
 - [ ] Typecheck, lint, and tests pass
 - [ ] No function exceeds 40 lines / complexity 10 / nesting 4
 - [ ] Layer-specific constraints satisfied

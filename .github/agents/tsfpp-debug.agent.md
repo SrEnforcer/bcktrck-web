@@ -72,6 +72,11 @@ If a runtime bug (not a type error or failing test), ask for a minimal reproduct
 
 **Step 2 — Locate the failure site**
 
+For type errors and rule violations:
+1. Call `get_rule({ id: 'N.M' })` to read the exact rule text before diagnosing.
+2. Call `check_pattern({ code })` on the failing code snippet for a mechanical scan.
+3. Call `get_pattern({ concept })` when proposing the correct alternative.
+
 For **type errors**: read the exact tsc message. Identify:
 - Which type is wrong
 - What tsc inferred vs. what was expected

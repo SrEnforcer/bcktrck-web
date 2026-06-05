@@ -24,22 +24,10 @@ Never import from `ramda` directly. Never import sub-paths.
 
 ---
 
-## Core exports
+## Full API surface
 
-| Group | Exports |
-|---|---|
-| Combinators | `pipe`, `flow`, `comp`, `complement` |
-| Exhaustiveness | `absurd` |
-| Option | `some`, `none`, `isSome`, `isNone`, `mapO`, `flatMapO`, `orElse`, `getOrElse` |
-| Result | `ok`, `err`, `isOk`, `isErr`, `map`, `flatMap`, `flatMapAsync`, `tryCatch`, `tryCatchAsync`, `tap`, `tapErr` |
-| Unit | `unit`, `Unit` |
-| Guards / conversions | `fromNullable`, `toNullable`, `isRecord`, `fromUnknownString`, `fromUnknownArray`, `fromUnknownArrayOf`, `fromNonEmptyString` |
-| Record decoding | `UnknownRecord`, `getStringField`, `getNumberField`, `getBooleanField`, `getTypedField` |
-| Branded types | `Brand`, `Every`, `Any`, `mkEvery`, `mkAny` |
-| Collections | `traverseArray`, `traverseArrayO`, `sequenceArrayO`, `unique` |
-| List ADT | `List`, `nil`, `cons`, `singletonList`, `isCons`, `isNil`, `fromArray`, `toArray`, `headList`, `tailList`, `isEmptyList`, `lengthList`, `mapList`, `flatMapList`, `appendList`, `reverseList`, `filterList`, `foldList`, `foldLeftList`, `foldLeftListCurried`, `traverseList` |
-| ReadonlyMap | `intoMap`, `entriesOfMap`, `assoc`, `dissoc`, `lookup` |
-| ReadonlySet | `intoSet`, `conj`, `disj`, `member` |
+For the complete, version-accurate export list:
+`get_api_surface({ package: '@tsfpp/prelude' })`
 
 ---
 

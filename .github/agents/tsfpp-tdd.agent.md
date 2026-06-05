@@ -41,6 +41,12 @@ Full coding standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 Load and apply the `/test-standard` skill. Every test you write must conform to
 all rules in that skill. Do not write a single test before the skill is loaded.
 
+If uncertain about the correct test pattern for this layer, call:
+`get_pattern({ concept: '<what you are testing>' })`
+
+For example: `get_pattern({ concept: 'Result assertion' })` or
+`get_pattern({ concept: 'smart constructor test' })`.
+
 ---
 
 ## Session start
@@ -331,6 +337,75 @@ describe('TrackRepository', () => {
       })
     })
   })
+})
+```
+
+---
+
+## Option and Result assertions
+
+Never use `if (isSome(...))` or `if (isOk(...))` as guards in test bodies.
+This is branching — forbidden — and produces a test that passes silently when the value is absent.
+
+```ts
+// Bad — branching, silently passes if None
+if (isSome(result.name)) {
+  expect(result.name.value).toBe('Alice')
+}
+
+// Bad — branching, silently passes if Err
+if (isOk(result)) {
+  expect(result.value.name).toBe('Alice')
+}
+
+// Good — assert on the full Option/Result value directly
+expect(result.name).toEqual(some('Alice'))
+expect(result).toEqual(ok({ name: 'Alice' }))
+
+// Good — when asserting on a specific field of a larger structure
+expect(record.components.artikel).toEqual(some('5'))
+expect(record.components.lid).toEqual(some('1'))
+```
+
+One `expect` per value. No branching. If the value is `None` or `Err`, the test fails correctly.
+
+---
+
+## AAA formatting is mandatory
+
+Every test body must follow Arrange / Act / Assert with a blank line between each phase.
+This is normative — not a style preference. Never collapse these blank lines.
+
+```ts
+// Correct — blank lines between phases
+it('returns None when the input is empty', () => {
+  const raw = ''                 // Arrange
+
+  const result = mkUserId(raw)   // Act
+
+  expect(result).toEqual(none)   // Assert
+})
+
+// Wrong — no blank lines
+it('returns None when the input is empty', () => {
+  const raw = ''
+  const result = mkUserId(raw)
+  expect(result).toEqual(none)
+})
+```
+
+When generating multiple `expect` calls that collectively verify one indivisible
+outcome, they stay together in the Assert phase — still separated from Act by one blank line:
+
+```ts
+it('returns a created user with the correct fields', () => {
+  const input = makeCreateUserInput()
+
+  const result = createUser(input)
+
+  expect(isOk(result)).toBe(true)
+  expect(result.value.name).toBe(input.name)
+  expect(result.value.email).toBe(input.email)
 })
 ```
 
