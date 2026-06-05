@@ -184,6 +184,7 @@ export type UseCompiledSvgInput = {
   readonly effectiveSubtreeIds: readonly string[] | undefined
   readonly styleSource: string | undefined
   readonly ignoreSourceStyle: boolean
+  readonly suppressVisualHints: boolean
 }
 
 /**
@@ -216,6 +217,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
         effectiveSubtreeIds: pipe(fromNullable(input.effectiveSubtreeIds), toNullable),
         styleSource: pipe(fromNullable(input.styleSource), toNullable),
         ignoreSourceStyle: input.ignoreSourceStyle,
+        suppressVisualHints: input.suppressVisualHints,
       }
 
       const responseResult = await tryCatchAsync(
@@ -302,7 +304,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
     return () => {
       abortController.abort()
     }
-  }, [input.source, input.effectiveSubtreeId, input.effectiveSubtreeIds, input.styleSource, input.ignoreSourceStyle])
+  }, [input.source, input.effectiveSubtreeId, input.effectiveSubtreeIds, input.styleSource, input.ignoreSourceStyle, input.suppressVisualHints])
 
   const errorText = useMemo(() => {
     if (result.ok) return ''

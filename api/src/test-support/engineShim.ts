@@ -45,6 +45,16 @@ type CompileOptions = {
   readonly ignoreSourceStyle: boolean | null
 }
 
+type CompileCall = Readonly<{
+  readonly source: string
+  readonly renderConfig: Readonly<Record<string, unknown>> | null
+  readonly options: Partial<CompileOptions> | null
+}>
+
+// DEVIATION(2.4): Test shim needs mutable in-memory state to expose last compile invocation between assertions.
+// eslint-disable-next-line functional/prefer-readonly-type
+const compileCallHolder: { current: CompileCall | null } = { current: null }
+
 /**
  * Baseline render config used by tests when no explicit override is provided.
  * @returns Immutable empty render configuration record.
@@ -53,20 +63,42 @@ export const defaultRenderConfig: Readonly<Record<string, unknown>> = {}
 
 /**
  * Return a stable successful compile result for API route tests.
- * @param _source Ignored shim parameter matching engine signature.
- * @param _renderConfig Ignored shim parameter matching engine signature.
- * @param _options Ignored shim parameter matching engine signature.
+ * @param source Source text forwarded by the route under test.
+ * @param renderConfig Render configuration forwarded by the route under test.
+ * @param options Compile options forwarded by the route under test.
  * @returns Compile success payload with deterministic SVG metadata.
  */
 export const compile = (
-  _source: string,
-  _renderConfig: Readonly<Record<string, unknown>> | null,
-  _options: Partial<CompileOptions> | null,
-): CompileResult => ({
-  ok: true,
-  svg: '<svg />',
-  viewBox: { x: 0, y: 0, width: 100, height: 100 },
-})
+  source: string,
+  renderConfig: Readonly<Record<string, unknown>> | null,
+  options: Partial<CompileOptions> | null,
+): CompileResult => {
+  compileCallHolder.current = {
+    source,
+    renderConfig,
+    options,
+  }
+
+  return {
+    ok: true,
+    svg: '<svg />',
+    viewBox: { x: 0, y: 0, width: 100, height: 100 },
+  }
+}
+
+/**
+ * Read the latest compile invocation captured by the test shim.
+ * @returns Last compile call payload or `null` when compile has not yet been called.
+ */
+export const getLastCompileCall = (): CompileCall | null => compileCallHolder.current
+
+/**
+ * Clear the latest compile invocation captured by the test shim.
+ * @returns No value.
+ */
+export const resetLastCompileCall = (): void => {
+  compileCallHolder.current = null
+}
 
 /**
  * Return an empty subtree list for tests that do not override this shim.

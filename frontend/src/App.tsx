@@ -305,6 +305,8 @@ function App(): React.JSX.Element {
     [stylePackChoice, selectedStylePackParts, styleEditorText]
   )
   const ignoreSourceStyle = stylePackChoice !== 'inherit'
+  // NOTE(unknown, 2026-06-05): Preview intentionally suppresses visual hints so source markers can remain without adding render noise.
+  const suppressVisualHints = true
 
   const {
     setSelectedSubtreeIds,
@@ -322,7 +324,8 @@ function App(): React.JSX.Element {
     effectiveSubtreeId,
     effectiveSubtreeIds,
     styleSource,
-    ignoreSourceStyle
+    ignoreSourceStyle,
+    suppressVisualHints
   })
   const [editorPanelWidth, setEditorPanelWidth] = useState(() => readStoredNumber(editorPanelWidthStorageKey, 42))
   const [editorFontSize, setEditorFontSize] = useState(() => readStoredNumber(editorFontSizeStorageKey, 14))

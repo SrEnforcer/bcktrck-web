@@ -50,6 +50,7 @@ export const makeUseCompiledSvgInput = (
   effectiveSubtreeIds: undefined,
   styleSource: undefined,
   ignoreSourceStyle: false,
+  suppressVisualHints: false,
 })
 
 /**
