@@ -1,7 +1,7 @@
 {
-  "extends": "@tsfpp/tsconfig/app",
-  "compilerOptions": {
-    "rootDir": "src"
-  },
-  "include": ["src"]
+  "files": [],
+  "references": [
+    { "path": "./api" },
+    { "path": "./frontend" }
+  ]
 }
