@@ -23,6 +23,7 @@ const CompileRequestSchema = z.object({
   source: z.string(),
   effectiveSubtreeId: z.string().min(1).nullable(),
   effectiveSubtreeIds: z.array(z.string().min(1)).nullable(),
+  collapsedSubtreeRootIds: z.array(z.string().min(1)).nullable().optional(),
   styleSource: z.string().min(1).nullable(),
   ignoreSourceStyle: z.boolean(),
   suppressVisualHints: z.boolean().optional(),
@@ -75,6 +76,124 @@ const withSuppressedVisualHintsRenderConfig = (): Readonly<Record<string, unknow
   showSubordinateCount: false,
 })
 
+const leadingIndent = (line: string): number => {
+  const prefix = line.match(/^[ \t]*/)?.[0] ?? ''
+  return prefix.replace(/\t/g, '  ').length
+}
+
+const extractDeptHandle = (line: string): string | undefined => {
+  const match = line.match(/^\s*~dept\b[^\n]*?@([A-Za-z0-9_-]+)/)
+  return match !== null ? match[1] : undefined
+}
+
+const extractPersonHandle = (line: string): string | undefined => {
+  const match = line.match(/\s@([A-Za-z0-9_-]+)\b/)
+  return match !== null ? match[1] : undefined
+}
+
+const extractHeadHandle = (line: string): string | undefined => {
+  const match = line.match(/\[head:\s*@([A-Za-z0-9_-]+)\]/)
+  return match?.[1]
+}
+
+const stripHeadAttributeIfNeeded = (line: string, prunedHandles: ReadonlySet<string>): string => {
+  const headHandle = extractHeadHandle(line)
+  if (headHandle !== undefined && prunedHandles.has(headHandle)) {
+    return line.replace(/\s*\[head:\s*@[A-Za-z0-9_-]+\]/, '')
+  }
+  return line
+}
+
+const isLinkLineReferencingPrunedHandle = (line: string, prunedHandles: ReadonlySet<string>): boolean => {
+  const match = line.match(/^\s*@([A-Za-z0-9_-]+)\s*-->\s*@([A-Za-z0-9_-]+)/)
+  if (match?.[1] === undefined || match?.[2] === undefined) return false
+  return prunedHandles.has(match[1]) || prunedHandles.has(match[2])
+}
+
+const isShadowLineReferencingPrunedHandle = (line: string, prunedHandles: ReadonlySet<string>): boolean => {
+  if (!line.includes('~shadow')) return false
+  const match = line.match(/\[primary:\s*@([A-Za-z0-9_-]+)/)
+  const primaryHandle = match?.[1]
+  return primaryHandle !== undefined && prunedHandles.has(primaryHandle)
+}
+
+type PruneState = Readonly<{
+  readonly kept: readonly string[]
+  readonly skipIndent: number | undefined
+  readonly prunedHandles: ReadonlySet<string>
+  readonly keepHandles: ReadonlySet<string>
+  readonly captureFirstChild: boolean
+}>
+
+const processPrunedLine = (state: PruneState, line: string): PruneState => {
+  const handle = extractPersonHandle(line)
+  if (handle !== undefined && state.keepHandles.has(handle)) {
+    return { ...state, kept: [...state.kept, line] }
+  }
+  if (state.captureFirstChild && handle !== undefined && !line.includes('~dept') && !line.includes('~shadow')) {
+    return { ...state, kept: [...state.kept, line], captureFirstChild: false }
+  }
+  if (handle !== undefined && !line.includes('~dept')) {
+    // eslint-disable-next-line no-restricted-syntax -- DEVIATION(1.9): Set tracks pruned handles; mutable state is local
+    return { ...state, prunedHandles: new Set(Array.from(state.prunedHandles).concat(handle)) }
+  }
+  return state
+}
+
+type KeptLineInput = Readonly<{ readonly state: PruneState; readonly line: string; readonly indent: number }>
+
+const makeProcessKeptLine = (collapsedRootIds: readonly string[]) =>
+  ({ state, line, indent }: KeptLineInput): PruneState => {
+    const deptHandle = extractDeptHandle(line)
+    const shouldStartSkipping = deptHandle !== undefined && collapsedRootIds.includes(deptHandle)
+    const headHandle = shouldStartSkipping ? extractHeadHandle(line) : undefined
+    // eslint-disable-next-line no-restricted-syntax -- DEVIATION(1.9): Set tracks keep handles; mutable state is local
+    const nextKeepHandles = headHandle !== undefined ? new Set([...Array.from(state.keepHandles), headHandle]) : state.keepHandles
+    return {
+      kept: [...state.kept, line],
+      skipIndent: shouldStartSkipping ? indent : undefined,
+      prunedHandles: state.prunedHandles,
+      keepHandles: nextKeepHandles,
+      captureFirstChild: shouldStartSkipping && headHandle === undefined,
+    }
+  }
+
+const pruneCollapsedSubtreeDescendantsFromSource = (
+  source: string,
+  collapsedRootIds: readonly string[]
+): string => {
+  if (collapsedRootIds.length === 0) {
+    return source
+  }
+
+  const lines = source.split(/\r?\n/)
+  const processKeptLine = makeProcessKeptLine(collapsedRootIds)
+
+  // First pass: build kept lines, track pruned handles, and keep one person per collapsed root.
+  // When a dept is collapsed its declared [head: @handle] person is preserved; if no head is
+  // declared the first direct person child is captured instead. All other descendants are pruned.
+  // eslint-disable-next-line no-restricted-syntax -- DEVIATION(1.9): Sets initialize handle tracking; mutable state is local
+  const initial: PruneState = { kept: [], skipIndent: undefined, prunedHandles: new Set<string>(), keepHandles: new Set<string>(), captureFirstChild: false }
+  const result = lines.reduce<PruneState>((state, line) => {
+    const lineIsBlank = line.trim().length === 0
+    const indent = leadingIndent(line)
+    const shouldStopSkipping = !lineIsBlank && state.skipIndent !== undefined && indent <= state.skipIndent
+    return state.skipIndent !== undefined && !shouldStopSkipping
+      ? processPrunedLine(state, line)
+      : processKeptLine({ state, line, indent })
+  }, initial)
+
+  // Second pass: strip [head: @handle] where the handle was pruned, remove link lines
+  // and shadow nodes whose [primary: @handle] references a pruned handle (since those
+  // nodes no longer exist in the source).
+  const cleanedLines = result.kept
+    .filter((line) => !isLinkLineReferencingPrunedHandle(line, result.prunedHandles))
+    .filter((line) => !isShadowLineReferencingPrunedHandle(line, result.prunedHandles))
+    .map((line) => stripHeadAttributeIfNeeded(line, result.prunedHandles))
+
+  return cleanedLines.join('\n')
+}
+
 const decodeCompileRequest = async (req: Request): Promise<CompileRequestParse> => {
   const bodyResult = await tryCatchAsync(
     () => req.json(),
@@ -110,7 +229,13 @@ const buildCompileOptions = (input: Readonly<{
 
 const toCompileInvocation = (body: CompileRequestBody): CompileInvocation => {
   const suppressVisualHints = body.suppressVisualHints === true
-  const source = suppressVisualHints ? suppressNewVisualHints(body.source) : body.source
+  const sourceWithCollapsedSubtreeRoots = pruneCollapsedSubtreeDescendantsFromSource(
+    body.source,
+    pipe(fromNullable(body.collapsedSubtreeRootIds), getOrElse((): readonly string[] => []))
+  )
+  const source = suppressVisualHints
+    ? suppressNewVisualHints(sourceWithCollapsedSubtreeRoots)
+    : sourceWithCollapsedSubtreeRoots
   const styleSource = suppressVisualHints
     ? withSuppressedIconsStyle(body.styleSource)
     : body.styleSource

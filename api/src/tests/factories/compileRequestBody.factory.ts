@@ -5,6 +5,7 @@ export type CompileRequestBody = Readonly<{
   readonly source: string
   readonly effectiveSubtreeId: string | null
   readonly effectiveSubtreeIds: ReadonlyArray<string> | null
+  readonly collapsedSubtreeRootIds: ReadonlyArray<string> | null
   readonly styleSource: string | null
   readonly ignoreSourceStyle: boolean
 }>
@@ -20,6 +21,7 @@ export const makeCompileRequestBody = (
   source: input.source,
   effectiveSubtreeId: null,
   effectiveSubtreeIds: null,
+  collapsedSubtreeRootIds: null,
   styleSource: null,
   ignoreSourceStyle: false,
 })
@@ -31,6 +33,7 @@ export const makeCompileRequestBody = (
 export const makeCompileRequestBodyMissingSource = (): Readonly<Record<string, unknown>> => ({
   effectiveSubtreeId: null,
   effectiveSubtreeIds: null,
+  collapsedSubtreeRootIds: null,
   styleSource: null,
   ignoreSourceStyle: false,
 })
