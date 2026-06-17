@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Standardize frontend debug event naming and payload logging so diagnostics are consistent and easier to filter.
 - Stabilize subtree isolation decoding across schema variants and suppress transient abort-driven render failure noise.
 - Suppress visual hint triangles, node icons, and subordinate-count badges in editor compile output while keeping markers in BTL source.
+- Add per-node "Node only" subtree isolation in the tree picker so selected departments can independently collapse descendants in union mode.
+- Prune collapsed subtree descendants server-side and clean dangling head/link/shadow references so compile preview no longer fails on unknown handles.
 
 ### Chores
 - Align workspace and API TSFPP dependency versions and move the release manifest to the expected repository path.
