@@ -50,6 +50,7 @@ export const makeEditorPanelProps = (): ComponentProps<typeof EditorPanel> => ({
   resolvedTheme: 'light',
   subtreeEntries: [],
   subtreeIsolationMode: 'forest',
+  collapsedSubtreeRootIds: [],
   normalizedSelectedSubtreeIds: [],
   forestSelectionIds: [],
   onLeftPanelTabChange: noop,
@@ -57,6 +58,7 @@ export const makeEditorPanelProps = (): ComponentProps<typeof EditorPanel> => ({
   onSourceChange: noop,
   onStyleEditorChange: noop,
   onSubtreeIsolationModeChange: noop,
+  onToggleCollapsedSubtreeRoot: noop,
   onClearSelectedSubtrees: noop,
   onToggleSelectedSubtree: noop,
 })

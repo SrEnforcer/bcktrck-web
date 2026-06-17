@@ -13,6 +13,7 @@ import type { SubtreeEntry } from '@bcktrck/engine'
 import {
   buildParentMapFromPreorderDepth,
   computeLowestCommonAncestor,
+  pruneDescendantEntriesFromRoots,
   pruneRedundantDescendantsForForestMode,
   sanitizeSelectedSubtreeIds
 } from '../lib/subtreeSelection'
@@ -39,6 +40,8 @@ export type UseSubtreeIsolationResult = {
   readonly setSelectedSubtreeIds: React.Dispatch<React.SetStateAction<readonly string[]>>
   readonly subtreeIsolationMode: SubtreeIsolationMode
   readonly setSubtreeIsolationMode: React.Dispatch<React.SetStateAction<SubtreeIsolationMode>>
+  readonly collapsedSubtreeRootIds: readonly string[]
+  readonly setCollapsedSubtreeRootIds: React.Dispatch<React.SetStateAction<readonly string[]>>
   readonly subtreeEntries: readonly SubtreeEntry[]
   readonly normalizedSelectedSubtreeIds: readonly string[]
   readonly forestSelectionIds: readonly string[]
@@ -135,6 +138,7 @@ const isAbortLikeError = (value: unknown): boolean => {
 export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtreeIsolationResult => {
   const [selectedSubtreeIds, setSelectedSubtreeIds] = useState<readonly string[]>([])
   const [subtreeIsolationMode, setSubtreeIsolationMode] = useState<SubtreeIsolationMode>('forest')
+  const [collapsedSubtreeRootIds, setCollapsedSubtreeRootIds] = useState<readonly string[]>([])
   const [allSubtreeEntries, setAllSubtreeEntries] = useState<readonly SubtreeEntry[]>([])
 
   useEffect(() => {
@@ -196,14 +200,31 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
     }
   }, [input.source, input.styleSource, input.ignoreSourceStyle])
 
-  const subtreeEntries = useMemo<readonly SubtreeEntry[]>(
+  const subtreeParentById = useMemo(() => buildParentMapFromPreorderDepth(allSubtreeEntries), [allSubtreeEntries])
+
+  const preferredSubtreeEntries = useMemo<readonly SubtreeEntry[]>(
     () => toPreferredSubtreeEntries(allSubtreeEntries),
     [allSubtreeEntries]
   )
 
-  const subtreeParentById = useMemo(
-    () => buildParentMapFromPreorderDepth(allSubtreeEntries),
-    [allSubtreeEntries]
+  const normalizedSelectedSubtreeIdsFromPreferredEntries = useMemo(
+    () => sanitizeSelectedSubtreeIds(preferredSubtreeEntries, selectedSubtreeIds),
+    [preferredSubtreeEntries, selectedSubtreeIds]
+  )
+
+  const normalizedCollapsedSubtreeRootIds = useMemo(
+    () => sanitizeSelectedSubtreeIds(preferredSubtreeEntries, collapsedSubtreeRootIds),
+    [preferredSubtreeEntries, collapsedSubtreeRootIds]
+  )
+
+  const activeCollapsedSubtreeRootIds = useMemo(
+    () => normalizedCollapsedSubtreeRootIds.filter((id) => normalizedSelectedSubtreeIdsFromPreferredEntries.includes(id)),
+    [normalizedCollapsedSubtreeRootIds, normalizedSelectedSubtreeIdsFromPreferredEntries]
+  )
+
+  const subtreeEntries = useMemo<readonly SubtreeEntry[]>(
+    () => pruneDescendantEntriesFromRoots(preferredSubtreeEntries, subtreeParentById, activeCollapsedSubtreeRootIds),
+    [preferredSubtreeEntries, subtreeParentById, activeCollapsedSubtreeRootIds]
   )
 
   const normalizedSelectedSubtreeIds = useMemo(
@@ -241,6 +262,8 @@ export const useSubtreeIsolation = (input: UseSubtreeIsolationInput): UseSubtree
     setSelectedSubtreeIds,
     subtreeIsolationMode,
     setSubtreeIsolationMode,
+    collapsedSubtreeRootIds: activeCollapsedSubtreeRootIds,
+    setCollapsedSubtreeRootIds,
     subtreeEntries,
     normalizedSelectedSubtreeIds,
     forestSelectionIds,

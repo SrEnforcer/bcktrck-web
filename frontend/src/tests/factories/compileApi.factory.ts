@@ -48,6 +48,7 @@ export const makeUseCompiledSvgInput = (
   source: input.source,
   effectiveSubtreeId: undefined,
   effectiveSubtreeIds: undefined,
+  collapsedSubtreeRootIds: undefined,
   styleSource: undefined,
   ignoreSourceStyle: false,
   suppressVisualHints: false,

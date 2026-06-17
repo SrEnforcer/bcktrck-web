@@ -312,6 +312,8 @@ function App(): React.JSX.Element {
     setSelectedSubtreeIds,
     subtreeIsolationMode,
     setSubtreeIsolationMode,
+    collapsedSubtreeRootIds,
+    setCollapsedSubtreeRootIds,
     subtreeEntries,
     normalizedSelectedSubtreeIds,
     forestSelectionIds,
@@ -323,6 +325,7 @@ function App(): React.JSX.Element {
     source,
     effectiveSubtreeId,
     effectiveSubtreeIds,
+    collapsedSubtreeRootIds,
     styleSource,
     ignoreSourceStyle,
     suppressVisualHints
@@ -468,11 +471,23 @@ function App(): React.JSX.Element {
         ? [...previous, subtreeId]
         : previous.filter((id) => id !== subtreeId)
     )
-  }, [setSelectedSubtreeIds])
+    if (!isChecked) {
+      setCollapsedSubtreeRootIds((previous) => previous.filter((id) => id !== subtreeId))
+    }
+  }, [setSelectedSubtreeIds, setCollapsedSubtreeRootIds])
+
+  const handleToggleCollapsedSubtreeRoot = useCallback((subtreeId: string, isChecked: boolean) => {
+    setCollapsedSubtreeRootIds((previous) =>
+      isChecked
+        ? [...previous, subtreeId]
+        : previous.filter((id) => id !== subtreeId)
+    )
+  }, [setCollapsedSubtreeRootIds])
 
   const handleClearSelectedSubtrees = useCallback(() => {
     setSelectedSubtreeIds([])
-  }, [setSelectedSubtreeIds])
+    setCollapsedSubtreeRootIds([])
+  }, [setSelectedSubtreeIds, setCollapsedSubtreeRootIds])
 
   const handlePrintPageFormatChange = useCallback((nextValue: string) => {
     if (isPrintPageFormat(nextValue)) {
@@ -656,6 +671,7 @@ function App(): React.JSX.Element {
           resolvedTheme={resolvedTheme}
           subtreeEntries={subtreeEntries}
           subtreeIsolationMode={subtreeIsolationMode}
+          collapsedSubtreeRootIds={collapsedSubtreeRootIds}
           normalizedSelectedSubtreeIds={normalizedSelectedSubtreeIds}
           forestSelectionIds={forestSelectionIds}
           onLeftPanelTabChange={setLeftPanelTab}
@@ -663,6 +679,7 @@ function App(): React.JSX.Element {
           onSourceChange={setSource}
           onStyleEditorChange={handleStyleEditorChange}
           onSubtreeIsolationModeChange={handleSubtreeModeChange}
+          onToggleCollapsedSubtreeRoot={handleToggleCollapsedSubtreeRoot}
           onClearSelectedSubtrees={handleClearSelectedSubtrees}
           onToggleSelectedSubtree={handleToggleSelectedSubtree}
           styleEditorText={styleEditorText}

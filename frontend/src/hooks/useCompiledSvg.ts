@@ -182,6 +182,7 @@ export type UseCompiledSvgInput = {
   readonly source: string
   readonly effectiveSubtreeId: string | undefined
   readonly effectiveSubtreeIds: readonly string[] | undefined
+  readonly collapsedSubtreeRootIds: readonly string[] | undefined
   readonly styleSource: string | undefined
   readonly ignoreSourceStyle: boolean
   readonly suppressVisualHints: boolean
@@ -215,6 +216,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
         source: input.source,
         effectiveSubtreeId: pipe(fromNullable(input.effectiveSubtreeId), toNullable),
         effectiveSubtreeIds: pipe(fromNullable(input.effectiveSubtreeIds), toNullable),
+        collapsedSubtreeRootIds: pipe(fromNullable(input.collapsedSubtreeRootIds), toNullable),
         styleSource: pipe(fromNullable(input.styleSource), toNullable),
         ignoreSourceStyle: input.ignoreSourceStyle,
         suppressVisualHints: input.suppressVisualHints,
@@ -304,7 +306,15 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
     return () => {
       abortController.abort()
     }
-  }, [input.source, input.effectiveSubtreeId, input.effectiveSubtreeIds, input.styleSource, input.ignoreSourceStyle, input.suppressVisualHints])
+  }, [
+    input.source,
+    input.effectiveSubtreeId,
+    input.effectiveSubtreeIds,
+    input.collapsedSubtreeRootIds,
+    input.styleSource,
+    input.ignoreSourceStyle,
+    input.suppressVisualHints,
+  ])
 
   const errorText = useMemo(() => {
     if (result.ok) return ''

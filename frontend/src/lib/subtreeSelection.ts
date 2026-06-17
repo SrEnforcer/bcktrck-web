@@ -49,13 +49,20 @@ export const buildParentMapFromPreorderDepth = (entries: readonly SubtreeEntry[]
       readonly parentById: ParentById
       readonly stack: readonly string[]
     }>((acc, entry) => {
-      const parentId = entry.depth > 0 ? acc.stack[entry.depth - 1] : undefined
+      const ancestorCandidates = acc.stack.slice(0, entry.depth)
+      const parentId = entry.depth > 0
+        ? [...ancestorCandidates].reverse().find((value) => value.length > 0)
+        : undefined
       const nextParentById = pipe(
         fromNullable(parentId),
         mapO((knownParentId) => intoMap([...entriesOfMap(acc.parentById), [entry.id, knownParentId] as const])),
         getOrElse(() => acc.parentById)
       )
-      const nextStack = [...acc.stack.slice(0, entry.depth), entry.id]
+      const nextStack = [
+        ...ancestorCandidates,
+        ...Array.from({ length: Math.max(0, entry.depth - ancestorCandidates.length) }, () => ''),
+        entry.id,
+      ]
       return {
         parentById: nextParentById,
         stack: nextStack
@@ -119,5 +126,23 @@ export const pruneRedundantDescendantsForForestMode = (
   return pipe(
     unique,
     (ids) => ids.filter((id) => !unique.some((candidate) => candidate !== id && isAncestor(candidate, id, parentById))),
+  )
+}
+
+/**
+ * Remove all descendants that are nested under one of the provided root ids.
+ * @param entries Entries to filter.
+ * @param rootIds Root ids whose descendants should be excluded.
+ * @returns Entries without descendants of the provided roots.
+ */
+export const pruneDescendantEntriesFromRoots = (
+  entries: readonly SubtreeEntry[],
+  parentById: ParentById,
+  rootIds: readonly string[]
+): readonly SubtreeEntry[] => {
+  const uniqueRoots = uniqueInOrder(rootIds)
+
+  return entries.filter((entry) =>
+    !uniqueRoots.some((rootId) => rootId !== entry.id && isAncestor(rootId, entry.id, parentById))
   )
 }

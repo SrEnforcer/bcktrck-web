@@ -5,6 +5,7 @@ import fc from 'fast-check'
 import {
   buildParentMapFromPreorderDepth,
   computeLowestCommonAncestor,
+  pruneDescendantEntriesFromRoots,
   pruneRedundantDescendantsForForestMode,
   sanitizeSelectedSubtreeIds
 } from './subtreeSelection'
@@ -75,6 +76,19 @@ describe('buildParentMapFromPreorderDepth', () => {
     expect(parentById.get('dept-a')).toBe('root-emp')
     expect(parentById.get('dept-b')).toBe('root-emp')
     expect(parentById.get('employee-b1')).toBe('dept-b')
+  })
+
+  it('falls back to nearest known ancestor when depth jumps', () => {
+    const parentById = buildParentMapFromPreorderDepth([
+      makeDepartmentEntry({ id: 'root', depth: 0 }),
+      makeDepartmentEntry({ id: 'staf', depth: 1 }),
+      makeDepartmentEntry({ id: 'leijdal', depth: 3 }),
+      makeDepartmentEntry({ id: 'groene-beemden', depth: 3 }),
+    ])
+
+    expect(parentById.get('staf')).toBe('root')
+    expect(parentById.get('leijdal')).toBe('staf')
+    expect(parentById.get('groene-beemden')).toBe('staf')
   })
 })
 
@@ -169,5 +183,34 @@ describe('sanitizeSelectedSubtreeIds laws', () => {
         expect(sanitized.every((id) => knownIds.includes(id))).toBe(true)
       }),
     )
+  })
+})
+
+describe('pruneDescendantEntriesFromRoots', () => {
+  it('keeps root nodes and removes all descendants below those roots', () => {
+    const entries: ReadonlyArray<SubtreeEntry> = [
+      makeDepartmentEntry({ id: 'root', depth: 0 }),
+      makeSubtreeEntry({ id: 'staff', depth: 1, kind: 'employee', label: 'staff' }),
+      makeDepartmentEntry({ id: 'team-leijdal', depth: 1 }),
+      makeDepartmentEntry({ id: 'leijdal-thor', depth: 2 }),
+      makeDepartmentEntry({ id: 'team-groene-beemden', depth: 1 }),
+      makeDepartmentEntry({ id: 'groene-thor', depth: 2 })
+    ]
+    const parentById = buildParentMapFromPreorderDepth(entries)
+
+    const filtered = pruneDescendantEntriesFromRoots(entries, parentById, ['team-leijdal', 'team-groene-beemden'])
+
+    expect(filtered.map((entry) => entry.id)).toEqual([
+      'root',
+      'staff',
+      'team-leijdal',
+      'team-groene-beemden'
+    ])
+  })
+
+  it('returns original entries when no roots are provided', () => {
+    const parentById = buildParentMapFromPreorderDepth(sampleEntries)
+    const filtered = pruneDescendantEntriesFromRoots(sampleEntries, parentById, [])
+    expect(filtered).toEqual(sampleEntries)
   })
 })

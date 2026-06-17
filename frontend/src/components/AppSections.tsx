@@ -143,6 +143,7 @@ type EditorPanelProps = {
   readonly resolvedTheme: 'light' | 'dark'
   readonly subtreeEntries: readonly SubtreeEntry[]
   readonly subtreeIsolationMode: 'context' | 'forest'
+  readonly collapsedSubtreeRootIds: readonly string[]
   readonly normalizedSelectedSubtreeIds: readonly string[]
   readonly forestSelectionIds: readonly string[]
   readonly onLeftPanelTabChange: (nextTab: 'source' | 'style' | 'tree') => void
@@ -150,6 +151,7 @@ type EditorPanelProps = {
   readonly onSourceChange: (nextSource: string) => void
   readonly onStyleEditorChange: (nextStyle: string) => void
   readonly onSubtreeIsolationModeChange: (nextMode: 'context' | 'forest') => void
+  readonly onToggleCollapsedSubtreeRoot: (subtreeId: string, isChecked: boolean) => void
   readonly onClearSelectedSubtrees: () => void
   readonly onToggleSelectedSubtree: (subtreeId: string, isChecked: boolean) => void
 }
@@ -171,6 +173,7 @@ export const EditorPanel = ({
   resolvedTheme,
   subtreeEntries,
   subtreeIsolationMode,
+  collapsedSubtreeRootIds,
   normalizedSelectedSubtreeIds,
   forestSelectionIds,
   onLeftPanelTabChange,
@@ -178,6 +181,7 @@ export const EditorPanel = ({
   onSourceChange,
   onStyleEditorChange,
   onSubtreeIsolationModeChange,
+  onToggleCollapsedSubtreeRoot,
   onClearSelectedSubtrees,
   onToggleSelectedSubtree
 }: EditorPanelProps): React.JSX.Element => (
@@ -283,19 +287,32 @@ export const EditorPanel = ({
             <div className="subtree-picker-list" role="group" aria-label="Department selection">
               {subtreeEntries.map((entry) => {
                 const checked = normalizedSelectedSubtreeIds.includes(entry.id)
+                const collapsed = collapsedSubtreeRootIds.includes(entry.id)
                 return (
-                  <label
+                  <div
                     key={entry.id}
                     className="subtree-picker-item"
                     style={{ paddingLeft: `${entry.depth * 12 + 8}px` }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => onToggleSelectedSubtree(entry.id, event.target.checked)}
-                    />
-                    <span>{entry.label}</span>
-                  </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => onToggleSelectedSubtree(entry.id, event.target.checked)}
+                      />
+                      <span>{entry.label}</span>
+                    </label>
+                    {checked && (
+                      <label title="Show only this node in the picker and hide descendants">
+                        <input
+                          type="checkbox"
+                          checked={collapsed}
+                          onChange={(event) => onToggleCollapsedSubtreeRoot(entry.id, event.target.checked)}
+                        />
+                        <span>Node only</span>
+                      </label>
+                    )}
+                  </div>
                 )
               })}
             </div>
