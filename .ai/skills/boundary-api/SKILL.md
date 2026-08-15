@@ -1,4 +1,4 @@
-# @tsfpp/boundary API — v1.2.0
+# @tsfpp/boundary API — v2.0.0
 
 Framework-agnostic Fetch API primitives. One peer dependency: `@tsfpp/prelude`.
 `kind` is the discriminant for all ADTs in this module.
@@ -6,20 +6,20 @@ Framework-agnostic Fetch API primitives. One peer dependency: `@tsfpp/prelude`.
 ## Import path
 
 ```ts
-import { createJsonHandler, extractContext, apiErrorToResponse, ... } from '@tsfpp/boundary'
+import { mkJsonHandler, extractContext, apiErrorToResponse, ... } from '@tsfpp/boundary'
 ```
 
 ---
 
-## Handler helpers (v1.2.0)
+## Handler helpers (v2.0.0)
 
 Prefer these over hand-rolling the parse → validate → respond pattern.
 
-### `createJsonHandler` — the default for JSON POST/PUT/PATCH
+### `mkJsonHandler` — the default for JSON POST/PUT/PATCH
 
 ```ts
 export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
-  createJsonHandler({
+  mkJsonHandler({
     deps,
     routeTemplate: '/v1/orders',
     schema: createOrderBody,          // Zod schema
@@ -35,14 +35,14 @@ export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
 
 `handle` receives `{ deps, ctx, body }` where `body` is already parsed and validated.
 Return `ok(Response)` for success or `err(ApiError)` for failure.
-`createJsonHandler` calls `extractContext`, runs `safeParse`, lifts Zod errors via `fromZodError`,
+`mkJsonHandler` calls `extractContext`, runs `safeParse`, lifts Zod errors via `fromZodError`,
 and calls `apiErrorToResponse` on `Err`. You do not call these manually inside `handle`.
 
-### `createHandler` — for handlers without a JSON body
+### `mkHandler` — for handlers without a JSON body
 
 ```ts
 const getOrderHandler: HandlerFactory<Deps> = (deps) =>
-  createHandler({
+  mkHandler({
     deps,
     routeTemplate: '/v1/orders/:id',
     handle: async ({ deps, ctx, req }) => {
@@ -82,15 +82,15 @@ return okResponse(mkPaginated(items.slice(0, page.limit), nextCursor))
 
 ---
 
-## Canonical handler shape (with createJsonHandler)
+## Canonical handler shape (with mkJsonHandler)
 
 ```ts
-import { createJsonHandler, type HandlerFactory, createdResponse,
+import { mkJsonHandler, type HandlerFactory, createdResponse,
          withIdempotency, withRequestLog } from '@tsfpp/boundary'
 import { err, isErr, ok, pipe } from '@tsfpp/prelude'
 
 export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
-  createJsonHandler({
+  mkJsonHandler({
     deps,
     routeTemplate: '/v1/orders',
     schema: createOrderBody,
@@ -114,9 +114,9 @@ export const makeRoute = (deps: Deps, store: IdempotencyStore, logger: RequestLo
 
 ---
 
-## Manual handler shape (without createJsonHandler)
+## Manual handler shape (without mkJsonHandler)
 
-Use only when createJsonHandler does not fit (multipart, streaming, etc.):
+Use only when mkJsonHandler does not fit (multipart, streaming, etc.):
 
 ```ts
 export const handler: HandlerFactory<Deps> = (deps) => async (req) => {
