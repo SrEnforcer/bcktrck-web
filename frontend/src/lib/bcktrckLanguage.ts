@@ -10,7 +10,7 @@
  */
 
 import type * as Monaco from 'monaco-editor'
-import { fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
+import { findO, fromNullable, getOrElseOption, isNone, mapOption, pipe } from '@tsfpp/prelude'
 
 const languageId = 'bcktrck'
 // DEVIATION(1.9): Monaco registration idempotency is tracked with WeakSet at the browser adapter boundary.
@@ -74,9 +74,9 @@ export const bcktrckTokenRules: readonly BcktrckTokenRule[] = [
 const getIndentSize = (line: string): number =>
   pipe(
     fromNullable(line.match(/^\s*/)),
-    mapO((match) => match[0]),
-    mapO((indentText) => indentText.length),
-    getOrElse(() => 0)
+    mapOption((match) => match[0]),
+    mapOption((indentText) => indentText.length),
+    getOrElseOption(() => 0)
   )
 
 const isRootBlockLine = (line: string): boolean => {
@@ -137,8 +137,8 @@ export const tokenizeBcktrckTextForTests = (text: string): readonly string[] => 
   const hasHeadMatch = (match: RegExpExecArray | null): boolean =>
     pipe(
       fromNullable(match),
-      mapO((candidate) => candidate.index === 0 && candidate[0].length > 0),
-      getOrElse(() => false)
+      mapOption((candidate) => candidate.index === 0 && candidate[0].length > 0),
+      getOrElseOption(() => false)
     )
 
   const scanTokens = (cursor: number, acc: readonly string[]): readonly string[] => {
@@ -147,12 +147,10 @@ export const tokenizeBcktrckTextForTests = (text: string): readonly string[] => 
     }
 
     const slice = text.slice(cursor)
-    const matchedRule = bcktrckTokenRules.find(([pattern]) => {
+    const matchedRuleOption = findO(([pattern]: BcktrckTokenRule) => {
       const match = pattern.exec(slice)
       return hasHeadMatch(match)
-    })
-
-    const matchedRuleOption = fromNullable(matchedRule)
+    })(bcktrckTokenRules)
     if (isNone(matchedRuleOption)) {
       return scanTokens(cursor + 1, acc)
     }

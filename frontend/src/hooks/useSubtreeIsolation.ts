@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, getNumberField, getStringField, isOk, isRecord, isSome, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getStringField, isOk, isRecord, isSome, orElseOption, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
 import type { SubtreeEntry } from '@bcktrck/engine'
 import {
   buildParentMapFromPreorderDepth,
@@ -59,21 +59,21 @@ const decodeSubtreeEntry = (value: unknown): SubtreeEntry | undefined => {
 
   const id = pipe(
     getStringField(value, 'id'),
-    (first) => (isSome(first) ? first : getStringField(value, 'nodeId')),
-    (second) => (isSome(second) ? second : getStringField(value, 'handle')),
+    orElseOption(() => getStringField(value, 'nodeId')),
+    orElseOption(() => getStringField(value, 'handle')),
   )
   const label = pipe(
     getStringField(value, 'label'),
-    (first) => (isSome(first) ? first : getStringField(value, 'name')),
-    (second) => (isSome(second) ? second : getStringField(value, 'title')),
+    orElseOption(() => getStringField(value, 'name')),
+    orElseOption(() => getStringField(value, 'title')),
   )
   const depth = pipe(
     getNumberField(value, 'depth'),
-    (first) => (isSome(first) ? first : getNumberField(value, 'level')),
+    orElseOption(() => getNumberField(value, 'level')),
   )
   const kind = pipe(
     getStringField(value, 'kind'),
-    (first) => (isSome(first) ? first : getStringField(value, 'type')),
+    orElseOption(() => getStringField(value, 'type')),
   )
 
   if (!isSome(id) || !isSome(label) || !isSome(depth)) {

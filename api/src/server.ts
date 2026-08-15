@@ -19,15 +19,15 @@ import {
   extractContext,
   mkValidationError,
   mkProblem,
-  notFoundError,
+  mkNotFoundError,
   okResponse,
   problemResponse,
-  rateLimitError,
+  mkRateLimitError,
   rateLimitHeaders,
   type RateLimitState,
   type RawHandler,
 } from '@tsfpp/boundary'
-import { fromNullable, getOrElse, isErr, isNone, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isErr, isNone, mapOption, pipe } from '@tsfpp/prelude'
 
 const configResult = parseApiConfig(process.env)
 
@@ -65,22 +65,26 @@ const badRequest = (request: Request, code: string, title: string): Response => 
 const payloadTooLarge = (request: Request): Response => {
   const ctx = extractContext(request, '/api/*')
   // DEVIATION(8.1): Payload-too-large requires HTTP 413, which is not represented in the canonical ApiError taxonomy.
-  return problemResponse(mkProblem(413, 'payload_too_large', 'Request payload exceeds configured limit', ctx.traceId, {
-    instance: ctx.url,
+  return problemResponse(mkProblem({
+    status: 413,
+    code: 'payload_too_large',
+    title: 'Request payload exceeds configured limit',
+    traceId: ctx.traceId,
+    opts: { instance: ctx.url },
   }))
 }
 
 const toRequestUrl = (req: http.IncomingMessage): URL => {
   const protocol = 'http'
-  const requestHost = pipe(fromNullable(req.headers.host), getOrElse(() => `localhost:${port}`))
+  const requestHost = pipe(fromNullable(req.headers.host), getOrElseOption(() => `localhost:${port}`))
   // DEVIATION(1.9): Node HTTP adapter requires URL construction to bridge IncomingMessage to Fetch Request.
   // eslint-disable-next-line no-restricted-syntax
-  return new URL(pipe(fromNullable(req.url), getOrElse(() => '/')), `${protocol}://${requestHost}`)
+  return new URL(pipe(fromNullable(req.url), getOrElseOption(() => '/')), `${protocol}://${requestHost}`)
 }
 
 const toRequestShell = (req: http.IncomingMessage): Request => {
   const requestUrl = toRequestUrl(req)
-  const method = pipe(fromNullable(req.method), getOrElse(() => 'GET'))
+  const method = pipe(fromNullable(req.method), getOrElseOption(() => 'GET'))
   // DEVIATION(1.9): Node HTTP adapter requires Request construction to bridge IncomingMessage to Fetch Request.
   // eslint-disable-next-line no-restricted-syntax
   return new Request(requestUrl, {
@@ -113,18 +117,18 @@ const getClientKey = (req: http.IncomingMessage): string => {
   const forwardedFor = req.headers['x-forwarded-for']
 
   if (typeof forwardedFor === 'string') {
-    const first = pipe(fromNullable(forwardedFor.split(',').at(0)), getOrElse(() => ''))
+    const first = pipe(fromNullable(forwardedFor.split(',').at(0)), getOrElseOption(() => ''))
     const normalized = first.trim()
     return normalized.length > 0 ? normalized : 'anonymous'
   }
 
   if (Array.isArray(forwardedFor)) {
-    const first = pipe(fromNullable(forwardedFor.at(0)), getOrElse(() => ''))
+    const first = pipe(fromNullable(forwardedFor.at(0)), getOrElseOption(() => ''))
     const normalized = first.trim()
     return normalized.length > 0 ? normalized : 'anonymous'
   }
 
-  const socketAddress = pipe(fromNullable(req.socket.remoteAddress), getOrElse(() => ''))
+  const socketAddress = pipe(fromNullable(req.socket.remoteAddress), getOrElseOption(() => ''))
   return socketAddress.length > 0 ? socketAddress : 'anonymous'
 }
 
@@ -136,8 +140,8 @@ const computeRateLimitState = (key: string): { readonly state: RateLimitState; r
   const nextBucket = needsReset
     ? { count: 1, resetAtMs: now + rateLimitWindowMs }
     : {
-      count: pipe(existingOption, mapO((bucket) => bucket.count + 1), getOrElse(() => 1)),
-      resetAtMs: pipe(existingOption, mapO((bucket) => bucket.resetAtMs), getOrElse(() => now + rateLimitWindowMs))
+      count: pipe(existingOption, mapOption((bucket) => bucket.count + 1), getOrElseOption(() => 1)),
+      resetAtMs: pipe(existingOption, mapOption((bucket) => bucket.resetAtMs), getOrElseOption(() => now + rateLimitWindowMs))
     }
   // DEVIATION(2.4): In-memory adapter rate limiter requires state updates between requests.
   // eslint-disable-next-line functional/immutable-data
@@ -180,9 +184,9 @@ const toFetchRequest = async (req: http.IncomingMessage): Promise<FetchRequestRe
     : undefined
   const requestBodyOption = pipe(
     fromNullable(bodyBuffer),
-    mapO((value) => value.toString('utf8')),
+    mapOption((value) => value.toString('utf8')),
   )
-  const requestBody = isNone(requestBodyOption) ? '' : requestBodyOption.value
+  const requestBody = getOrElseOption(() => '')(requestBodyOption)
 
   return {
     kind: 'request',
@@ -202,7 +206,7 @@ const notFound = (request: Request): Response => {
   // DEVIATION(1.9): Adapter must parse URL for route extraction.
   // eslint-disable-next-line no-restricted-syntax
   const path = new URL(request.url).pathname
-  return apiErrorToResponse(notFoundError('route', path), ctx)
+  return apiErrorToResponse(mkNotFoundError('route', path), ctx)
 }
 
 /**
@@ -267,7 +271,7 @@ const handleNodeRequest = (req: http.IncomingMessage, res: http.ServerResponse):
 
     if (exceeded) {
       const ctx = extractContext(request, '/api/*')
-      const limited = apiErrorToResponse(rateLimitError(Math.ceil((state.resetAt.getTime() - Date.now()) / 1_000)), ctx)
+      const limited = apiErrorToResponse(mkRateLimitError(Math.ceil((state.resetAt.getTime() - Date.now()) / 1_000)), ctx)
       await writeResponse(res, limited, rateLimitStateHeaders)
       return
     }

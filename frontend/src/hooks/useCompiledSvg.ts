@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { fromNullable, getNumberField, getOrElse, getStringField, getTypedField, isOk, isRecord, isSome, mapO, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getOrElseOption, getStringField, getTypedField, isOk, isRecord, isSome, mapOption, matchOption, pipe, toNullable, tryCatchAsync } from '@tsfpp/prelude'
 import { sanitizeSvgMarkup } from '../lib/svgSanitization'
 
 type ParseError = {
@@ -155,12 +155,12 @@ const formatParseErrorWithContext = (
 
   const context = Array.from({ length: endLine - startLine + 1 }, (_, index) => {
     const lineNo = startLine + index
-    const text = pipe(fromNullable(lines[lineNo - 1]), getOrElse(() => ''))
+    const text = pipe(fromNullable(lines[lineNo - 1]), getOrElseOption(() => ''))
     const marker = lineNo === errorLine ? '>' : ' '
     return `${marker} ${String(lineNo).padStart(3, ' ')} | ${text}`
   })
 
-  const currentLineText = pipe(fromNullable(lines[errorLine - 1]), getOrElse(() => ''))
+  const currentLineText = pipe(fromNullable(lines[errorLine - 1]), getOrElseOption(() => ''))
   const pointerPrefix = `    ${String(errorLine).padStart(3, ' ')} | `
   const pointer = `${pointerPrefix}${buildCaretPointer(currentLineText, parseError.col)}`
   const hint = fromNullable(buildParseHint(parseError.error))
@@ -171,7 +171,7 @@ const formatParseErrorWithContext = (
     '',
     ...context,
     pointer,
-    ...(isSome(hint) ? ['', hint.value] : [])
+    ...matchOption(() => [], (value: string) => ['', value])(hint)
   ].join('\n')
 }
 
@@ -278,7 +278,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
       const decoded = decodeCompileResult(payloadResult.value)
       pipe(
         fromNullable(decoded),
-        mapO((value) => {
+        mapOption((value) => {
           setResult(value)
           return value
         })
@@ -320,7 +320,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
     if (result.ok) return ''
     const parseErrorText = pipe(
       fromNullable(result.parseError),
-      mapO((parseError) => formatParseErrorWithContext(input.source, parseError))
+      mapOption((parseError) => formatParseErrorWithContext(input.source, parseError))
     )
     if (isSome(parseErrorText)) {
       return parseErrorText.value
@@ -328,7 +328,7 @@ export const useCompiledSvg = (input: UseCompiledSvgInput): UseCompiledSvgResult
 
     const resolveErrors = pipe(
       fromNullable(result.resolveErrors),
-      getOrElse((): ReadonlyArray<ResolveError> => [])
+      getOrElseOption((): ReadonlyArray<ResolveError> => [])
     )
     if (resolveErrors.length > 0) {
       return resolveErrors.map((error) => `- [${error.line}:${error.col}] ${error.message}`).join('\n')

@@ -11,12 +11,12 @@ import {
   apiErrorToResponse,
   extractContext,
   fromZodError,
-  internalError,
+  mkInternalError,
   okResponse,
   type RawHandler,
 } from '@tsfpp/boundary'
 import { listSubtreesFromSource } from '@bcktrck/engine'
-import { isErr, isOk, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
+import { isErr, match, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
 import { z } from 'zod'
 
 const SubtreesRequestSchema = z.object({
@@ -54,7 +54,7 @@ export const subtreesHandler: RawHandler = async (req): Promise<Response> => {
     () => req.json(),
     (cause) => cause,
   )
-  const rawBody = isOk(bodyResult) ? bodyResult.value : {}
+  const rawBody = match(() => ({}), (value: unknown) => value)(bodyResult)
   const parsedBody = SubtreesRequestSchema.safeParse(rawBody)
 
   if (!parsedBody.success) {
@@ -71,7 +71,7 @@ export const subtreesHandler: RawHandler = async (req): Promise<Response> => {
 
   const entries = tryCatch(
     () => listSubtreesFromSource(parsedBody.data.source, subtreeOptions),
-    (cause) => internalError(cause),
+    (cause) => mkInternalError(cause),
   )
 
   if (isErr(entries)) {

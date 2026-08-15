@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 
-import { type LogEntry, type Logger, fromNullable, getOrElse, mapO, pipe } from '@tsfpp/prelude'
+import { type LogEntry, type Logger, fromNullable, getOrElseOption, mapOption, pipe } from '@tsfpp/prelude'
 
 const writeDebug = (entry: LogEntry): void => {
   if (!__BCKTRCK_DEBUG__) return
@@ -39,8 +39,8 @@ const toPayloadString = (payload: unknown): string => {
 
 const toPayloadField = (payload: unknown): Readonly<Record<string, unknown>> => pipe(
   fromNullable(payload),
-  mapO((value) => ({ payload: toPayloadString(value) })),
-  getOrElse(() => ({})),
+  mapOption((value) => ({ payload: toPayloadString(value) })),
+  getOrElseOption(() => ({})),
 )
 
 /**

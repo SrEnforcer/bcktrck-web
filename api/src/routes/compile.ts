@@ -11,12 +11,12 @@ import {
   apiErrorToResponse,
   extractContext,
   fromZodError,
-  internalError,
+  mkInternalError,
   okResponse,
   type RawHandler,
 } from '@tsfpp/boundary'
 import { compile, defaultRenderConfig } from '@bcktrck/engine'
-import { fromNullable, getOrElse, isErr, isOk, mapO, pipe, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isErr, mapOption, match, pipe, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
 import { z } from 'zod'
 
 const CompileRequestSchema = z.object({
@@ -65,7 +65,7 @@ const ICON_SUPPRESSION_STYLE_SOURCE = 'style\n  .node\n    icon-opacity: 0'
 const suppressNewVisualHints = (source: string): string => source.replace(/\s*!new(?::[^\s\]]+)?(?=\s|$)/gm, '')
 
 const withSuppressedIconsStyle = (styleSource: string | null): string => {
-  const baseStyleSource = pipe(fromNullable(styleSource), getOrElse(() => ''))
+  const baseStyleSource = pipe(fromNullable(styleSource), getOrElseOption(() => ''))
   return baseStyleSource.length > 0
     ? `${baseStyleSource}\n\n${ICON_SUPPRESSION_STYLE_SOURCE}`
     : ICON_SUPPRESSION_STYLE_SOURCE
@@ -199,7 +199,7 @@ const decodeCompileRequest = async (req: Request): Promise<CompileRequestParse> 
     () => req.json(),
     (cause) => cause,
   )
-  const rawBody = isOk(bodyResult) ? bodyResult.value : {}
+  const rawBody = match(() => ({}), (value: unknown) => value)(bodyResult)
   return CompileRequestSchema.safeParse(rawBody)
 }
 
@@ -212,18 +212,18 @@ const buildCompileOptions = (input: Readonly<{
   ignoreSourceStyle: input.ignoreSourceStyle,
   ...pipe(
     fromNullable(input.effectiveSubtreeId),
-    mapO((subtreeId) => ({ subtreeId })),
-    getOrElse(() => ({})),
+    mapOption((subtreeId) => ({ subtreeId })),
+    getOrElseOption(() => ({})),
   ),
   ...pipe(
     fromNullable(input.effectiveSubtreeIds),
-    mapO((subtreeIds) => ({ subtreeIds })),
-    getOrElse(() => ({})),
+    mapOption((subtreeIds) => ({ subtreeIds })),
+    getOrElseOption(() => ({})),
   ),
   ...pipe(
     fromNullable(input.styleSource),
-    mapO((styleSource) => ({ styleSource })),
-    getOrElse(() => ({})),
+    mapOption((styleSource) => ({ styleSource })),
+    getOrElseOption(() => ({})),
   ),
 })
 
@@ -231,7 +231,7 @@ const toCompileInvocation = (body: CompileRequestBody): CompileInvocation => {
   const suppressVisualHints = body.suppressVisualHints === true
   const sourceWithCollapsedSubtreeRoots = pruneCollapsedSubtreeDescendantsFromSource(
     body.source,
-    pipe(fromNullable(body.collapsedSubtreeRootIds), getOrElse((): readonly string[] => []))
+    pipe(fromNullable(body.collapsedSubtreeRootIds), getOrElseOption((): readonly string[] => []))
   )
   const source = suppressVisualHints
     ? suppressNewVisualHints(sourceWithCollapsedSubtreeRoots)
@@ -290,7 +290,7 @@ export const compileHandler: RawHandler = async (req): Promise<Response> => {
 
   const compiled = tryCatch(
     () => compile(compileInvocation.source, compileInvocation.renderConfig, compileInvocation.options),
-    (cause) => internalError(cause),
+    (cause) => mkInternalError(cause),
   )
 
   if (isErr(compiled)) {

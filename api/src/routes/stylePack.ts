@@ -11,12 +11,12 @@ import {
   apiErrorToResponse,
   extractContext,
   fromZodError,
-  notFoundError,
+  mkNotFoundError,
   okResponse,
   type RawHandler,
 } from '@tsfpp/boundary'
 import { getStylePack } from '@bcktrck/engine'
-import { fromNullable, isNone, isOk, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, isNone, match, tryCatchAsync } from '@tsfpp/prelude'
 import { z } from 'zod'
 
 const StylePackRequestSchema = z.object({
@@ -52,7 +52,7 @@ export const stylePackHandler: RawHandler = async (req): Promise<Response> => {
     () => req.json(),
     (cause) => cause,
   )
-  const rawBody = isOk(bodyResult) ? bodyResult.value : {}
+  const rawBody = match(() => ({}), (value: unknown) => value)(bodyResult)
   const parsedBody = StylePackRequestSchema.safeParse(rawBody)
 
   if (!parsedBody.success) {
@@ -61,7 +61,7 @@ export const stylePackHandler: RawHandler = async (req): Promise<Response> => {
 
   const packText = fromNullable(getStylePack(parsedBody.data.choice))
   if (isNone(packText)) {
-    return apiErrorToResponse(notFoundError('style_pack', parsedBody.data.choice), ctx)
+    return apiErrorToResponse(mkNotFoundError('style_pack', parsedBody.data.choice), ctx)
   }
 
   return okResponse({ packText: packText.value }, { 'X-Request-Id': ctx.traceId })

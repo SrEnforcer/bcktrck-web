@@ -7,7 +7,7 @@
  */
 
 import type { SubtreeEntry } from '@bcktrck/engine'
-import { entriesOfMap, flatMapO, fromNullable, getOrElse, intoMap, intoSet, isNone, lookup, mapO, member, pipe } from '@tsfpp/prelude'
+import { entriesOf, findO, flatMapOption, fromNullable, getOrElseOption, intoMap, intoSet, isNone, lookup, mapOption, matchOption, member, none, pipe } from '@tsfpp/prelude'
 
 /** Parent lookup map keyed by subtree id. */
 export type ParentById = ReadonlyMap<string, string>
@@ -50,13 +50,13 @@ export const buildParentMapFromPreorderDepth = (entries: readonly SubtreeEntry[]
       readonly stack: readonly string[]
     }>((acc, entry) => {
       const ancestorCandidates = acc.stack.slice(0, entry.depth)
-      const parentId = entry.depth > 0
-        ? [...ancestorCandidates].reverse().find((value) => value.length > 0)
-        : undefined
+      const parentIdOption = entry.depth > 0
+        ? findO((value: string) => value.length > 0)([...ancestorCandidates].reverse())
+        : none
       const nextParentById = pipe(
-        fromNullable(parentId),
-        mapO((knownParentId) => intoMap([...entriesOfMap(acc.parentById), [entry.id, knownParentId] as const])),
-        getOrElse(() => acc.parentById)
+        parentIdOption,
+        mapOption((knownParentId) => intoMap([...entriesOf(acc.parentById), [entry.id, knownParentId] as const])),
+        getOrElseOption(() => acc.parentById)
       )
       const nextStack = [
         ...ancestorCandidates,
@@ -72,7 +72,7 @@ export const buildParentMapFromPreorderDepth = (entries: readonly SubtreeEntry[]
 
 const buildChainToRoot = (id: string, parentById: ParentById): readonly string[] => {
   const parent = pipe(parentById, lookup(id))
-  return isNone(parent) ? [id] : [...buildChainToRoot(parent.value, parentById), id]
+  return matchOption(() => [id], (value: string) => [...buildChainToRoot(value, parentById), id])(parent)
 }
 
 /**
@@ -93,14 +93,14 @@ export const computeLowestCommonAncestor = (
   return Array.from({ length: shortestLength }, (_, index) => index).reduce<string | undefined>((lca, index) => {
     const current = pipe(
       fromNullable(chains[0]),
-      flatMapO((chain) => fromNullable(chain[index])),
-      getOrElse((): string | undefined => undefined)
+      flatMapOption((chain) => fromNullable(chain[index])),
+      getOrElseOption((): string | undefined => undefined)
     )
 
     return pipe(
       fromNullable(current),
-      mapO((knownCurrent) => (chains.every((chain) => chain[index] === knownCurrent) ? knownCurrent : lca)),
-      getOrElse(() => lca)
+      mapOption((knownCurrent) => (chains.every((chain) => chain[index] === knownCurrent) ? knownCurrent : lca)),
+      getOrElseOption(() => lca)
     )
   }, undefined)
 }

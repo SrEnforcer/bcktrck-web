@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fromNullable, getNumberField, getOrElse, isErr, isNone, isRecord, isSome, mapO, pipe, tryCatch } from '@tsfpp/prelude'
+import { fromNullable, getNumberField, getOrElseOption, isErr, isNone, isRecord, isSome, mapOption, match, pipe, tryCatch } from '@tsfpp/prelude'
 import { debugLog } from '../logging/logger'
 import { clampScale, computeCenteredOffset, computeFitScale, computeReadableScale, type Point, type ViewBox, zoomOffsetAroundPivot } from '../lib/viewportMath'
 
@@ -51,7 +51,7 @@ const readSessionStorage = (key: string): string | null => {
     () => null,
   )
 
-  return isErr(readResult) ? null : readResult.value
+  return match(() => null, (value: string | null) => value)(readResult)
 }
 
 const writeSessionStorage = (key: string, value: string, logMessage: string): void => {
@@ -83,17 +83,17 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
     const stored = readSessionStorage(sessionZoomKey)
     return pipe(
       fromNullable(stored),
-      mapO((value) => Number(value)),
-      getOrElse(() => 1)
+      mapOption((value) => Number(value)),
+      getOrElseOption(() => 1)
     )
   })
   const [previewOffset, setPreviewOffset] = useState<Point>(() => {
     const stored = readSessionStorage(sessionOffsetKey)
     const parsedResult = tryCatch(
-      () => JSON.parse(pipe(fromNullable(stored), getOrElse(() => '{"x":0,"y":0}'))),
+      () => JSON.parse(pipe(fromNullable(stored), getOrElseOption(() => '{"x":0,"y":0}'))),
       () => ({ x: 0, y: 0 }),
     )
-    const parsed = isErr(parsedResult) ? { x: 0, y: 0 } : parsedResult.value
+    const parsed = match(() => ({ x: 0, y: 0 }), (value: unknown) => value)(parsedResult)
     if (!isRecord(parsed)) return { x: 0, y: 0 }
 
     const x = getNumberField(parsed, 'x')
@@ -216,7 +216,7 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
 
     const rect = pipe(
       fromNullable(previewStageRef.current?.getBoundingClientRect()),
-      getOrElse(() => ({ left: 0, top: 0 }))
+      getOrElseOption(() => ({ left: 0, top: 0 }))
     )
     setRectSelect({
       start: { x: event.clientX - rect.left, y: event.clientY - rect.top },
@@ -235,7 +235,7 @@ export const usePreviewViewport = (input: UsePreviewViewportInput): UsePreviewVi
 
     const rect = pipe(
       fromNullable(previewStageRef.current?.getBoundingClientRect()),
-      getOrElse(() => ({ left: 0, top: 0 }))
+      getOrElseOption(() => ({ left: 0, top: 0 }))
     )
     setRectSelect({
       ...rectSelectOption.value,

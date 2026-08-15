@@ -8,16 +8,15 @@
  */
 
 import type http from 'node:http'
+import { entriesOfRecord, foldMap, monoidSum } from '@tsfpp/prelude'
 
 /**
  * Compute byte size for a mixed chunk sequence from a Node request stream.
  * @param chunks Request body chunks as strings or buffers.
  * @returns Total byte size represented by the chunks.
  */
-export const bodyBytes = (chunks: ReadonlyArray<Buffer | string>): number => chunks.reduce(
-  (sum, chunk) => sum + (typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length),
-  0,
-)
+export const bodyBytes = (chunks: ReadonlyArray<Buffer | string>): number =>
+  foldMap<Buffer | string, number>(monoidSum)((chunk) => typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length)(chunks)
 
 /**
  * Normalize Node incoming headers into Fetch-compatible header init format.
@@ -25,7 +24,7 @@ export const bodyBytes = (chunks: ReadonlyArray<Buffer | string>): number => chu
  * @returns Immutable key-value representation for Fetch request construction.
  */
 export const toHeadersInit = (headers: http.IncomingHttpHeaders): HeadersInit =>
-  Object.entries(headers).reduce<Readonly<Record<string, string>>>(
+  entriesOfRecord(headers).reduce<Readonly<Record<string, string>>>(
     (acc, [key, value]) => {
       if (typeof value === 'string') {
         return { ...acc, [key]: value }

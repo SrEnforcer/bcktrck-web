@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 import type { SubtreeEntry } from '@bcktrck/engine'
-import { fromNullable, getOrElse, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isSome, mapOption, pipe } from '@tsfpp/prelude'
 import { Expand, Hand, Maximize2, Minus, Plus, RotateCcw, Square, X } from 'lucide-react'
 import type { RefObject } from 'react'
 import { BcktrckEditor } from './BcktrckEditor'
@@ -107,8 +107,8 @@ export const WorkspaceTopbar = ({
           onClick={onUndo}
           title={`Undo (restore to ${pipe(
             fromNullable(undoStack[0]),
-            mapO((source) => source.split(/\r?\n/).length),
-            getOrElse(() => 0)
+            mapOption((source) => source.split(/\r?\n/).length),
+            getOrElseOption(() => 0)
           )} lines)`}
         >
           ↶ Undo
@@ -472,7 +472,7 @@ export const PreviewPanel = ({
         </div>
         {pipe(
           fromNullable(rectSelect),
-          mapO((selection) => (
+          mapOption((selection) => (
             <div
               style={{
                 position: 'absolute',
@@ -487,7 +487,7 @@ export const PreviewPanel = ({
               }}
             />
           )),
-          getOrElse((): React.JSX.Element | null => null)
+          getOrElseOption((): React.JSX.Element | null => null)
         )}
       </div>
     ) : (

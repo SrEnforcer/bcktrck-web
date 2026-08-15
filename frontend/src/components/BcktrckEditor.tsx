@@ -8,7 +8,7 @@
  */
 import Editor from '@monaco-editor/react'
 import type * as Monaco from 'monaco-editor'
-import { fromNullable, getOrElse, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, pipe } from '@tsfpp/prelude'
 import { bcktrckEditorTheme, bcktrckLanguageId, registerBcktrckLanguage } from '../lib/bcktrckLanguage'
 
 type BcktrckEditorProps = {
@@ -36,7 +36,7 @@ export function BcktrckEditor({ initialValue, onChange, fontSize, editorInstance
         language={bcktrckLanguageId}
         theme={bcktrckEditorTheme[resolvedTheme]}
         defaultValue={initialValue}
-        onChange={(nextValue) => onChange(pipe(fromNullable(nextValue), getOrElse(() => '')))}
+        onChange={(nextValue) => onChange(pipe(fromNullable(nextValue), getOrElseOption(() => '')))}
         beforeMount={handleBeforeMount}
         options={{
           minimap: { enabled: false },

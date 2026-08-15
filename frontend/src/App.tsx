@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fromNullable, fromUnknownString, getOrElse, isErr, isNone, isOk, isRecord, isSome, mapO, pipe, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
+import { findO, fromNullable, fromUnknownString, getOrElseOption, isErr, isNone, isOk, isRecord, isSome, mapOption, match, matchOption, pipe, tryCatch, tryCatchAsync } from '@tsfpp/prelude'
 import { EditorPanel, OverlayViewer, PreviewPanel, WorkspaceTopbar } from './components/AppSections'
 import { debugLog } from './logging/logger'
 import { useCompiledSvg } from './hooks/useCompiledSvg'
@@ -101,24 +101,25 @@ const isStylePackChoice = (value: string): value is StylePackChoice =>
 
 const toPrintPageFormat = (value: unknown): PrintPageFormat | undefined => {
   const parsed = fromUnknownString(value)
-  return isSome(parsed) && isPrintPageFormat(parsed.value) ? parsed.value : undefined
+  return matchOption(() => undefined, (value: string) => isPrintPageFormat(value) ? value : undefined)(parsed)
 }
 
 const toThemePreference = (value: unknown): ThemePreference | undefined => {
   const parsed = fromUnknownString(value)
-  return isSome(parsed) && isThemePreference(parsed.value) ? parsed.value : undefined
+  return matchOption(() => undefined, (value: string) => isThemePreference(value) ? value : undefined)(parsed)
 }
 
 const toStylePackChoice = (value: unknown): StylePackChoice | undefined => {
   const parsed = fromUnknownString(value)
-  return isSome(parsed) && isStylePackChoice(parsed.value) ? parsed.value : undefined
+  return matchOption(() => undefined, (value: string) => isStylePackChoice(value) ? value : undefined)(parsed)
 }
 
 const resolvePrintPageSize = (format: PrintPageFormat): string =>
   pipe(
-    fromNullable(printPageFormats.find((entry) => entry.value === format)),
-    mapO((entry) => entry.pageSize),
-    getOrElse(() => 'A4 landscape')
+    printPageFormats,
+    findO((entry) => entry.value === format),
+    mapOption((entry) => entry.pageSize),
+    getOrElseOption(() => 'A4 landscape')
   )
 
 const readLocalStorageItem = (key: string): string | null => {
@@ -129,7 +130,7 @@ const readLocalStorageItem = (key: string): string | null => {
     () => null,
   )
 
-  return isErr(readResult) ? null : readResult.value
+  return match(() => null, (value: string | null) => value)(readResult)
 }
 
 const writeLocalStorageItem = (key: string, value: string, message: string): void => {
@@ -183,7 +184,7 @@ const writeSessionStorageItem = (key: string, value: string): void => {
 const readStoredNumber = (key: string, fallback: number): number => {
   const raw = pipe(
     fromNullable(readLocalStorageItem(key)),
-    getOrElse(() => String(fallback))
+    getOrElseOption(() => String(fallback))
   )
   const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -219,7 +220,7 @@ function App(): React.JSX.Element {
     const persistedSource = readLocalStorageItem(sourceStorageKey)
     return pipe(
       fromNullable(persistedSource),
-      getOrElse(() => initialScript)
+      getOrElseOption(() => initialScript)
     )
   })
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('source')
@@ -228,7 +229,7 @@ function App(): React.JSX.Element {
     const parsed = toStylePackChoice(stored)
     return pipe(
       fromNullable(parsed),
-      getOrElse((): StylePackChoice => 'inherit')
+      getOrElseOption((): StylePackChoice => 'inherit')
     )
   })
   const [styleEditorTextByChoice, setStyleEditorTextByChoice] = useState<Readonly<Partial<Record<StylePackChoice, string>>>>({})
@@ -278,7 +279,7 @@ function App(): React.JSX.Element {
     [stylePackChoice, stylePackCache]
   )
   const selectedStylePackParts = useMemo(
-    () => splitStylePack(pipe(fromNullable(selectedStylePackText), getOrElse(() => ''))),
+    () => splitStylePack(pipe(fromNullable(selectedStylePackText), getOrElseOption(() => ''))),
     [selectedStylePackText]
   )
   const styleEditorText = useMemo(
@@ -290,14 +291,14 @@ function App(): React.JSX.Element {
       const edited = styleEditorTextByChoice[stylePackChoice]
       return pipe(
         fromNullable(edited),
-        getOrElse(() => selectedStylePackParts.styleBodyText)
+        getOrElseOption(() => selectedStylePackParts.styleBodyText)
       )
     },
     [stylePackChoice, styleEditorTextByChoice, selectedStylePackParts]
   )
   const styleEditorInstanceKey = useMemo(
     // NOTE(unknown, 2026-05-17): Monaco uses defaultValue only on mount, so this key intentionally forces remount on source changes.
-    () => `${stylePackChoice}:${pipe(fromNullable(selectedStylePackText), getOrElse(() => ''))}`,
+    () => `${stylePackChoice}:${pipe(fromNullable(selectedStylePackText), getOrElseOption(() => ''))}`,
     [stylePackChoice, selectedStylePackText]
   )
   const styleSource = useMemo(
@@ -337,7 +338,7 @@ function App(): React.JSX.Element {
     const parsed = toPrintPageFormat(stored)
     return pipe(
       fromNullable(parsed),
-      getOrElse(() => defaultPrintPageFormat)
+      getOrElseOption(() => defaultPrintPageFormat)
     )
   })
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
@@ -345,7 +346,7 @@ function App(): React.JSX.Element {
     const parsed = toThemePreference(stored)
     return pipe(
       fromNullable(parsed),
-      getOrElse((): ThemePreference => 'system')
+      getOrElseOption((): ThemePreference => 'system')
     )
   })
   const { resolvedTheme } = useThemeEffects({ themePreference })
@@ -356,13 +357,14 @@ function App(): React.JSX.Element {
   const workspaceRef = useRef<HTMLElement>(null)
   const currentPrintFormat = useMemo(
     () => pipe(
-      fromNullable(printPageFormats.find((format) => format.value === printPageFormat)),
-      getOrElse(() => printPageFormats[0])
+      printPageFormats,
+      findO((format) => format.value === printPageFormat),
+      getOrElseOption(() => printPageFormats[0])
     ),
     [printPageFormat]
   )
   const effectiveSubtreeIdForLogs = useMemo(
-    () => pipe(fromNullable(effectiveSubtreeId), getOrElse(() => 'root')),
+    () => pipe(fromNullable(effectiveSubtreeId), getOrElseOption(() => 'root')),
     [effectiveSubtreeId]
   )
   const sourceLineCount = useMemo(() => source.split(/\r?\n/).length, [source])
@@ -614,8 +616,8 @@ function App(): React.JSX.Element {
     const hasParseError = isSome(fromNullable(result.parseError))
     const hasResolveErrors = pipe(
       fromNullable(result.resolveErrors),
-      mapO((errors) => errors.length > 0),
-      getOrElse(() => false)
+      mapOption((errors) => errors.length > 0),
+      getOrElseOption(() => false)
     )
 
     if (!hasParseError && !hasResolveErrors) {
